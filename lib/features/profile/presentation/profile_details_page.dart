@@ -8,12 +8,10 @@ class ProfileDetailsPage extends StatefulWidget {
   const ProfileDetailsPage({super.key});
 
   @override
-  State<ProfileDetailsPage> createState() =>
-      _ProfileDetailsPageState();
+  State<ProfileDetailsPage> createState() => _ProfileDetailsPageState();
 }
 
-class _ProfileDetailsPageState
-    extends State<ProfileDetailsPage> {
+class _ProfileDetailsPageState extends State<ProfileDetailsPage> {
   bool _showCloudMode = false;
 
   String _displayName = 'Mofiney User';
@@ -42,10 +40,7 @@ class _ProfileDetailsPageState
               final trimmed = value.trim();
 
               if (trimmed.isNotEmpty) {
-                Navigator.pop(
-                  dialogContext,
-                  trimmed,
-                );
+                Navigator.pop(dialogContext, trimmed);
               }
             },
           ),
@@ -64,10 +59,7 @@ class _ProfileDetailsPageState
                   return;
                 }
 
-                Navigator.pop(
-                  dialogContext,
-                  trimmed,
-                );
+                Navigator.pop(dialogContext, trimmed);
               },
               child: const Text('Save'),
             ),
@@ -90,9 +82,7 @@ class _ProfileDetailsPageState
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile Details'),
-      ),
+      appBar: AppBar(title: const Text('Profile Details')),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -109,13 +99,9 @@ class _ProfileDetailsPageState
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
                   color: colors.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(
-                    AppRadius.xl,
-                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.xl),
                   border: Border.all(
-                    color: colors.outlineVariant.withValues(
-                      alpha: 0.4,
-                    ),
+                    color: colors.outlineVariant.withValues(alpha: 0.4),
                   ),
                 ),
                 child: Column(
@@ -133,8 +119,7 @@ class _ProfileDetailsPageState
                           alignment: Alignment.center,
                           child: Text(
                             'U',
-                            style:
-                                AppTextStyles.headlineLarge.copyWith(
+                            style: AppTextStyles.headlineLarge.copyWith(
                               color: colors.onPrimaryContainer,
                               fontWeight: FontWeight.w800,
                             ),
@@ -149,8 +134,7 @@ class _ProfileDetailsPageState
                             shape: const CircleBorder(),
                             child: InkWell(
                               onTap: () {
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(
+                                ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text(
                                       'Profile photo editing will be connected later.',
@@ -183,8 +167,7 @@ class _ProfileDetailsPageState
                             _displayName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style:
-                                AppTextStyles.headlineLargeMobile.copyWith(
+                            style: AppTextStyles.headlineLargeMobile.copyWith(
                               color: colors.onSurface,
                               fontWeight: FontWeight.w700,
                             ),
@@ -212,9 +195,7 @@ class _ProfileDetailsPageState
                       ),
                       decoration: BoxDecoration(
                         color: colors.secondaryContainer,
-                        borderRadius: BorderRadius.circular(
-                          AppRadius.full,
-                        ),
+                        borderRadius: BorderRadius.circular(AppRadius.full),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -297,9 +278,7 @@ class _ProfileDetailsPageState
                                   _showCloudMode = false;
                                 });
                               },
-                              borderRadius: BorderRadius.circular(
-                                AppRadius.md,
-                              ),
+                              borderRadius: BorderRadius.circular(AppRadius.md),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 9,
@@ -335,9 +314,7 @@ class _ProfileDetailsPageState
                                   _showCloudMode = true;
                                 });
                               },
-                              borderRadius: BorderRadius.circular(
-                                AppRadius.md,
-                              ),
+                              borderRadius: BorderRadius.circular(AppRadius.md),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 9,
@@ -377,9 +354,7 @@ class _ProfileDetailsPageState
                         padding: const EdgeInsets.all(AppSpacing.sm),
                         decoration: BoxDecoration(
                           color: colors.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(
-                            AppRadius.md,
-                          ),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -413,10 +388,11 @@ class _ProfileDetailsPageState
                                       Expanded(
                                         child: Text(
                                           'Local Mode',
-                                          style: AppTextStyles.bodyMedium.copyWith(
-                                            color: colors.onSurface,
-                                            fontWeight: FontWeight.w700,
-                                          ),
+                                          style: AppTextStyles.bodyMedium
+                                              .copyWith(
+                                                color: colors.onSurface,
+                                                fontWeight: FontWeight.w700,
+                                              ),
                                         ),
                                       ),
 
@@ -426,19 +402,19 @@ class _ProfileDetailsPageState
                                           vertical: 3,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: colors.tertiaryContainer.withValues(
-                                            alpha: 0.15,
-                                          ),
+                                          color: colors.tertiaryContainer
+                                              .withValues(alpha: 0.15),
                                           borderRadius: BorderRadius.circular(
                                             AppRadius.full,
                                           ),
                                         ),
                                         child: Text(
                                           'ACTIVE',
-                                          style: AppTextStyles.labelCaps.copyWith(
-                                            color: colors.tertiary,
-                                            fontSize: 9,
-                                          ),
+                                          style: AppTextStyles.labelCaps
+                                              .copyWith(
+                                                color: colors.tertiary,
+                                                fontSize: 9,
+                                              ),
                                         ),
                                       ),
                                     ],
@@ -464,9 +440,7 @@ class _ProfileDetailsPageState
                         padding: const EdgeInsets.all(AppSpacing.sm),
                         decoration: BoxDecoration(
                           color: colors.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(
-                            AppRadius.md,
-                          ),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -514,9 +488,7 @@ class _ProfileDetailsPageState
                                     ),
                                   );
                                 },
-                                child: const Text(
-                                  'Sign In / Create Account',
-                                ),
+                                child: const Text('Sign In / Create Account'),
                               ),
                             ),
                           ],
@@ -559,11 +531,7 @@ class _SummaryTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                size: 16,
-                color: colors.onSurfaceVariant,
-              ),
+              Icon(icon, size: 16, color: colors.onSurfaceVariant),
               const SizedBox(width: 5),
               Expanded(
                 child: Text(

@@ -5,6 +5,16 @@ import 'add_expense_page.dart';
 import 'transfer_page.dart';
 import 'scan_receipt_page.dart';
 
+import '../../../core/app_dependencies.dart';
+import '../../../core/utils/money_input_parser.dart';
+import '../../../core/currency/currency_catalog.dart';
+import '../domain/transaction.dart';
+
+import 'dart:async';
+
+import '../../accounts/domain/account.dart';
+import '../../categories/domain/category.dart';
+
 class AddIncomePage extends StatefulWidget {
   const AddIncomePage({super.key});
 
@@ -16,48 +26,97 @@ class _AddIncomePageState extends State<AddIncomePage> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
 
-  String _selectedIncomeSource = 'Salary';
-  String _selectedAccount = 'Maybank';
-
   DateTime _selectedDate = DateTime.now();
 
-  final List<Map<String, dynamic>> _incomeSources = [
-    {
-      'label': 'Salary',
-      'icon': Icons.work_outline_rounded,
-    },
-    {
-      'label': 'Freelance',
-      'icon': Icons.laptop_mac_rounded,
-    },
-    {
-      'label': 'Investment',
-      'icon': Icons.show_chart_rounded,
-    },
-    {
-      'label': 'Gift',
-      'icon': Icons.card_giftcard_rounded,
-    },
-    {
-      'label': 'Refund',
-      'icon': Icons.replay_rounded,
-    },
-    {
-      'label': 'Other',
-      'icon': Icons.category_outlined,
-    },
-  ];
+  String? _selectedIncomeSource;
+  Account? _selectedAccount;
 
-  final List<String> _accounts = [
-    'Maybank',
-    'CIMB',
-    "Touch 'n Go",
-    'Credit Card',
-    'Cash',
-  ];
+  List<Category> _incomeSources = [];
+  StreamSubscription<List<Category>>? _categoriesSubscription;
+
+  List<Category> get _quickIncomeSources => _incomeSources.take(5).toList();
+
+  List<Account> _accounts = [];
+  bool _isLoadingAccounts = true;
+  String _baseCurrency = 'MYR';
+
+  @override
+  void initState() {
+    super.initState();
+    _watchIncomeCategories();
+    _loadAccounts();
+    _loadBaseCurrency();
+  }
+
+  Future<void> _loadBaseCurrency() async {
+    await appSettingsRepository.ensureSettingsExist();
+    final settings = await appSettingsRepository.getSettings();
+    if (mounted)
+      setState(() => _baseCurrency = settings?.baseCurrency ?? 'MYR');
+  }
+
+  void _watchIncomeCategories() {
+    _categoriesSubscription?.cancel();
+
+    _categoriesSubscription = categoryRepository.watchAllCategories().listen(
+      (categories) {
+        final incomeCategories = categories
+            .where(
+              (category) =>
+                  category.type == CategoryType.income && category.isActive,
+            )
+            .toList();
+
+        if (!mounted) return;
+
+        setState(() {
+          _incomeSources = incomeCategories;
+
+          final selectedStillExists =
+              _selectedIncomeSource != null &&
+              incomeCategories.any(
+                (category) => category.name == _selectedIncomeSource,
+              );
+
+          if (!selectedStillExists) {
+            _selectedIncomeSource = incomeCategories.isEmpty
+                ? null
+                : incomeCategories.first.name;
+          }
+        });
+      },
+      onError: (Object error) {
+        debugPrint('Failed to watch income categories: $error');
+      },
+    );
+  }
+
+  Future<void> _loadAccounts() async {
+    final accounts = await accountRepository.getAllAccounts();
+
+    final activeAccounts = accounts
+        .where((account) => account.isActive)
+        .toList();
+
+    if (!mounted) return;
+
+    setState(() {
+      _accounts = activeAccounts;
+
+      if (activeAccounts.isNotEmpty) {
+        _selectedAccount = activeAccounts.firstWhere(
+          (account) => account.isPrimary,
+          orElse: () => activeAccounts.first,
+        );
+      }
+
+      _isLoadingAccounts = false;
+    });
+  }
 
   @override
   void dispose() {
+    _categoriesSubscription?.cancel();
     _amountController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -66,9 +125,7 @@ class _AddIncomePageState extends State<AddIncomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Income'),
-      ),
+      appBar: AppBar(title: const Text('Add Income')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -83,7 +140,8 @@ class _AddIncomePageState extends State<AddIncomePage> {
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const AddExpensePage(),
+                          builder: (_) =>
+                              AddExpensePage(repository: transactionRepository),
                         ),
                       );
                       break;
@@ -149,52 +207,86 @@ class _AddIncomePageState extends State<AddIncomePage> {
       width: double.infinity,
       child: FilledButton.icon(
         onPressed: _saveIncome,
-        icon: const Icon(
-          Icons.check_rounded,
-        ),
-        label: const Text(
-          'Save Income',
-        ),
+        icon: const Icon(Icons.check_rounded),
+        label: const Text('Save Income'),
         style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(
-            vertical: 16,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 16),
         ),
       ),
     );
   }
 
-  void _saveIncome() {
+  Future<void> _saveIncome() async {
     final amountText = _amountController.text.trim();
-    final amount = double.tryParse(amountText);
+    final amount = MoneyInputParser.parse(amountText);
 
     if (amountText.isEmpty || amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please enter a valid income amount.',
-          ),
-        ),
+        const SnackBar(content: Text('Please enter a valid income amount.')),
       );
-
       return;
     }
 
-    debugPrint('----- INCOME -----');
-    debugPrint('Amount: $amount');
-    debugPrint('Source: $_selectedIncomeSource');
-    debugPrint('Account: $_selectedAccount');
-    debugPrint('Date: $_selectedDate');
-    debugPrint('Notes: ${_notesController.text.trim()}');
-    debugPrint('------------------');
+    final selectedAccount = _selectedAccount;
+    if (selectedAccount == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an account.')),
+      );
+      return;
+    }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Income is ready to save.',
-        ),
-      ),
+    final selectedIncomeSource = _selectedIncomeSource;
+    if (selectedIncomeSource == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an income category.')),
+      );
+      return;
+    }
+
+    final now = DateTime.now();
+
+    final transactionDateTime = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      now.hour,
+      now.minute,
+      now.second,
+      now.millisecond,
+      now.microsecond,
     );
+
+    final transaction = Transaction(
+      id: 'income_${DateTime.now().microsecondsSinceEpoch}',
+      title: selectedIncomeSource,
+      category: selectedIncomeSource,
+      accountId: selectedAccount.id,
+      account: selectedAccount.name,
+
+      amount: amount,
+      currencyCode: selectedAccount.currencyCode,
+      accountAmount: amount,
+
+      type: TransactionType.income,
+      dateTime: transactionDateTime,
+      note: _notesController.text.trim().isEmpty
+          ? null
+          : _notesController.text.trim(),
+    );
+
+    try {
+      await transactionRepository.insertTransaction(transaction);
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop(transaction);
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save income: $error')));
+    }
   }
 
   Widget _buildNotesSection(BuildContext context) {
@@ -228,9 +320,7 @@ class _AddIncomePageState extends State<AddIncomePage> {
             maxLines: 3,
             decoration: InputDecoration(
               hintText: 'Add memorandum or details...',
-              prefixIcon: const Icon(
-                Icons.edit_note_outlined,
-              ),
+              prefixIcon: const Icon(Icons.edit_note_outlined),
               filled: true,
               fillColor: colors.surfaceContainerLowest,
               border: OutlineInputBorder(
@@ -303,10 +393,7 @@ class _AddIncomePageState extends State<AddIncomePage> {
               ),
             ),
 
-            Icon(
-              Icons.edit_calendar_outlined,
-              color: colors.onSurfaceVariant,
-            ),
+            Icon(Icons.edit_calendar_outlined, color: colors.onSurfaceVariant),
           ],
         ),
       ),
@@ -316,17 +403,9 @@ class _AddIncomePageState extends State<AddIncomePage> {
   String _formatIncomeDate(DateTime date) {
     final now = DateTime.now();
 
-    final today = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    );
+    final today = DateTime(now.year, now.month, now.day);
 
-    final selected = DateTime(
-      date.year,
-      date.month,
-      date.day,
-    );
+    final selected = DateTime(date.year, date.month, date.day);
 
     const months = [
       'Jan',
@@ -395,7 +474,9 @@ class _AddIncomePageState extends State<AddIncomePage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'RM',
+                CurrencyCatalog.find(
+                  _selectedAccount?.currencyCode ?? _baseCurrency,
+                ).symbol,
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
@@ -430,10 +511,7 @@ class _AddIncomePageState extends State<AddIncomePage> {
           const SizedBox(height: 8),
 
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 5,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: colors.tertiary.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(999),
@@ -466,8 +544,13 @@ class _AddIncomePageState extends State<AddIncomePage> {
   Widget _buildIncomeSourceSection(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
+    if (_incomeSources.isEmpty) {
+      return const Text('No active income categories available.');
+    }
+
     final selectedSourceData = _incomeSources.firstWhere(
-      (source) => source['label'] == _selectedIncomeSource,
+      (source) => source.name == _selectedIncomeSource,
+      orElse: () => _incomeSources.first,
     );
 
     return Column(
@@ -488,8 +571,8 @@ class _AddIncomePageState extends State<AddIncomePage> {
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
-            children: _incomeSources.map((source) {
-              final label = source['label'] as String;
+            children: _quickIncomeSources.map((source) {
+              final label = source.name;
               final selected = _selectedIncomeSource == label;
 
               return Padding(
@@ -517,8 +600,9 @@ class _AddIncomePageState extends State<AddIncomePage> {
                       label,
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight:
-                            selected ? FontWeight.w600 : FontWeight.w500,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                         color: selected
                             ? colors.onPrimary
                             : colors.onSurfaceVariant,
@@ -550,7 +634,7 @@ class _AddIncomePageState extends State<AddIncomePage> {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  selectedSourceData['icon'] as IconData,
+                  _iconFromCodePoint(selectedSourceData.iconCodePoint),
                   size: 20,
                   color: colors.primary,
                 ),
@@ -575,7 +659,7 @@ class _AddIncomePageState extends State<AddIncomePage> {
                     const SizedBox(height: 2),
 
                     Text(
-                      _selectedIncomeSource,
+                      selectedSourceData.name,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -602,46 +686,57 @@ class _AddIncomePageState extends State<AddIncomePage> {
   void _showIncomeSourcePicker(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      builder: (context) {
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Select Income Source',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Select Income Source',
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+
+                const SizedBox(height: 16),
+
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _incomeSources.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 4),
+                    itemBuilder: (context, index) {
+                      final source = _incomeSources[index];
+                      final selected = _selectedIncomeSource == source.name;
+
+                      return ListTile(
+                        leading: CircleAvatar(
+                          child: Icon(
+                            _iconFromCodePoint(source.iconCodePoint),
+                            size: 20,
+                          ),
                         ),
+                        title: Text(source.name),
+                        trailing: selected
+                            ? const Icon(Icons.check_rounded)
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            _selectedIncomeSource = source.name;
+                          });
+
+                          Navigator.pop(sheetContext);
+                        },
+                      );
+                    },
                   ),
                 ),
-              ),
-
-              ..._incomeSources.map(
-                (source) {
-                  final label = source['label'] as String;
-                  final icon = source['icon'] as IconData;
-
-                  return ListTile(
-                    leading: Icon(icon),
-                    title: Text(label),
-                    trailing: _selectedIncomeSource == label
-                        ? const Icon(Icons.check_rounded)
-                        : null,
-                    onTap: () {
-                      setState(() {
-                        _selectedIncomeSource = label;
-                      });
-
-                      Navigator.pop(context);
-                    },
-                  );
-                },
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -671,7 +766,7 @@ class _AddIncomePageState extends State<AddIncomePage> {
   void _showAccountPicker(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -682,9 +777,8 @@ class _AddIncomePageState extends State<AddIncomePage> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Select Account',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -692,12 +786,13 @@ class _AddIncomePageState extends State<AddIncomePage> {
               ..._accounts.map(
                 (account) => ListTile(
                   leading: CircleAvatar(
-                    child: Text(
-                      _accountInitials(account),
-                    ),
+                    child: Text(_accountInitials(account.name)),
                   ),
-                  title: Text(account),
-                  trailing: _selectedAccount == account
+                  title: Text(account.name),
+                  subtitle: Text(
+                    '${account.currencyCode} · transaction uses this currency',
+                  ),
+                  trailing: _selectedAccount?.id == account.id
                       ? const Icon(Icons.check_rounded)
                       : null,
                   onTap: () {
@@ -705,7 +800,7 @@ class _AddIncomePageState extends State<AddIncomePage> {
                       _selectedAccount = account;
                     });
 
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                   },
                 ),
               ),
@@ -717,6 +812,19 @@ class _AddIncomePageState extends State<AddIncomePage> {
   }
 
   Widget _buildAccountSection(BuildContext context) {
+    if (_isLoadingAccounts) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_accounts.isEmpty) {
+      return const Text('No active accounts available.');
+    }
+
     final colors = Theme.of(context).colorScheme;
 
     return InkWell(
@@ -740,7 +848,7 @@ class _AddIncomePageState extends State<AddIncomePage> {
               ),
               child: Center(
                 child: Text(
-                  _accountInitials(_selectedAccount),
+                  _accountInitials(_selectedAccount?.name ?? ''),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -769,7 +877,7 @@ class _AddIncomePageState extends State<AddIncomePage> {
                   const SizedBox(height: 2),
 
                   Text(
-                    _selectedAccount,
+                    _selectedAccount?.name ?? 'Select account',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -780,13 +888,27 @@ class _AddIncomePageState extends State<AddIncomePage> {
               ),
             ),
 
-            Icon(
-              Icons.unfold_more_rounded,
-              color: colors.onSurfaceVariant,
-            ),
+            Icon(Icons.unfold_more_rounded, color: colors.onSurfaceVariant),
           ],
         ),
       ),
+    );
+  }
+
+  IconData _iconFromCodePoint(int codePoint) {
+    const icons = [
+      Icons.work_outline_rounded,
+      Icons.laptop_mac_rounded,
+      Icons.show_chart_rounded,
+      Icons.card_giftcard_rounded,
+      Icons.replay_rounded,
+      Icons.payments_outlined,
+      Icons.category_outlined,
+    ];
+
+    return icons.firstWhere(
+      (icon) => icon.codePoint == codePoint,
+      orElse: () => Icons.category_outlined,
     );
   }
 }

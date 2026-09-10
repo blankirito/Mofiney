@@ -1,20 +1,178 @@
 import 'package:flutter/material.dart';
 
-import '../data/mock_accounts.dart';
 import '../domain/account.dart';
 import 'account_detail_page.dart';
-import '../../transactions/data/mock_transactions.dart';
 import '../domain/account_balance_calculator.dart';
 import 'add_account_page.dart';
 
+import '../data/account_repository.dart';
 
-class AccountsPage extends StatelessWidget {
-  const AccountsPage({super.key});
+import 'dart:async';
+
+import '../../transactions/data/transaction_repository.dart';
+import '../../transactions/domain/transaction.dart';
+import '../../../core/app_dependencies.dart';
+import '../../../core/database/app_database.dart';
+import '../../../core/currency/currency_catalog.dart';
+import '../../../core/currency/currency_converter.dart';
+
+class AccountsPage extends StatefulWidget {
+  const AccountsPage({
+    super.key,
+    required this.repository,
+    required this.transactionRepository,
+  });
+
+  final AccountRepository repository;
+  final TransactionRepository transactionRepository;
+
+  @override
+  State<AccountsPage> createState() => _AccountsPageState();
+}
+
+class _AccountsPageState extends State<AccountsPage> {
+  List<Account> _accounts = [];
+  List<Transaction> _transactions = [];
+
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  StreamSubscription<List<Transaction>>? _transactionsSubscription;
+
+  StreamSubscription<List<Account>>? _accountsSubscription;
+  StreamSubscription<AppSettingsEntry?>? _settingsSubscription;
+  String _baseCurrency = 'MYR';
+  CurrencyConverter _converter = CurrencyConverter('MYR');
+
+  @override
+  void initState() {
+    super.initState();
+
+    _watchAccounts();
+    _watchTransactions();
+    _settingsSubscription = appSettingsRepository.watchSettings().listen((
+      settings,
+    ) {
+      if (mounted && settings != null) {
+        setState(() => _baseCurrency = settings.baseCurrency);
+        _refreshRates();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _accountsSubscription?.cancel();
+    _transactionsSubscription?.cancel();
+    _settingsSubscription?.cancel();
+
+    super.dispose();
+  }
+
+  void _watchTransactions() {
+    _transactionsSubscription?.cancel();
+
+    _transactionsSubscription = widget.transactionRepository
+        .watchAllTransactions()
+        .listen(
+          (transactions) {
+            if (!mounted) {
+              return;
+            }
+
+            setState(() {
+              _transactions = transactions;
+            });
+            _refreshRates();
+          },
+          onError: (Object error) {
+            debugPrint('Failed to watch account transactions: $error');
+          },
+        );
+  }
+
+  void _watchAccounts() {
+    _accountsSubscription?.cancel();
+
+    _accountsSubscription = widget.repository.watchAllAccounts().listen(
+      (accounts) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _accounts = accounts;
+          _isLoading = false;
+          _errorMessage = null;
+        });
+        _refreshRates();
+      },
+      onError: (Object error) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _isLoading = false;
+          _errorMessage = error.toString();
+        });
+      },
+    );
+  }
+
+  Future<void> _refreshRates() async {
+    final base = _baseCurrency;
+    final converter = CurrencyConverter(base);
+    await converter.warm(const ['MYR']);
+    if (mounted && base == _baseCurrency)
+      setState(() => _converter = converter);
+  }
+
+  double _convert(double value, Account _) => _converter.convert(value, 'MYR');
+  String get _symbol => CurrencyCatalog.find(_baseCurrency).symbol;
 
   @override
   Widget build(BuildContext context) {
-    final activeAccounts =
-        mockAccounts.where((account) => account.isActive).toList();
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_errorMessage != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Accounts')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline_rounded, size: 40),
+                const SizedBox(height: 12),
+                const Text('Failed to load accounts'),
+                const SizedBox(height: 8),
+                Text(_errorMessage!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () {
+                    setState(() {
+                      _isLoading = true;
+                      _errorMessage = null;
+                    });
+
+                    _watchAccounts();
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final activeAccounts = _accounts
+        .where((account) => account.isActive)
+        .toList();
 
     final assetAccounts = activeAccounts
         .where((account) => account.type != AccountType.creditCard)
@@ -28,9 +186,9 @@ class AccountsPage extends StatelessWidget {
       0,
       (sum, account) =>
           sum +
-          AccountBalanceCalculator.calculate(
+          _convert(
+            AccountBalanceCalculator.calculate(account, _transactions),
             account,
-            mockTransactions,
           ),
     );
 
@@ -38,9 +196,9 @@ class AccountsPage extends StatelessWidget {
       0,
       (sum, account) =>
           sum +
-          AccountBalanceCalculator.calculate(
+          _convert(
+            AccountBalanceCalculator.calculate(account, _transactions),
             account,
-            mockTransactions,
           ),
     );
 
@@ -51,28 +209,25 @@ class AccountsPage extends StatelessWidget {
         title: const Text('Accounts'),
         actions: [
           IconButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const AddAccountPage(),
-                ),
+            onPressed: () async {
+              final newAccount = await Navigator.of(context).push<Account>(
+                MaterialPageRoute(builder: (_) => const AddAccountPage()),
               );
+
+              if (newAccount == null) {
+                return;
+              }
+
+              await widget.repository.insertAccount(newAccount);
             },
-            icon: const Icon(
-              Icons.add_rounded,
-            ),
+            icon: const Icon(Icons.add_rounded),
           ),
         ],
       ),
       body: SafeArea(
         top: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            16,
-            8,
-            16,
-            32,
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
           children: [
             _buildOverviewCard(
               context,
@@ -93,13 +248,8 @@ class AccountsPage extends StatelessWidget {
 
             ...assetAccounts.map(
               (account) => Padding(
-                padding: const EdgeInsets.only(
-                  bottom: 10,
-                ),
-                child: _buildAccountCard(
-                  context,
-                  account: account,
-                ),
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _buildAccountCard(context, account: account),
               ),
             ),
 
@@ -116,13 +266,8 @@ class AccountsPage extends StatelessWidget {
 
               ...creditAccounts.map(
                 (account) => Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: 10,
-                  ),
-                  child: _buildCreditAccountCard(
-                    context,
-                    account: account,
-                  ),
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _buildCreditAccountCard(context, account: account),
                 ),
               ),
             ],
@@ -163,7 +308,7 @@ class AccountsPage extends StatelessWidget {
           const SizedBox(height: 6),
 
           Text(
-            'RM ${netWorth.toStringAsFixed(2)}',
+            '$_symbol ${netWorth.toStringAsFixed(2)}',
             style: TextStyle(
               fontSize: 30,
               fontWeight: FontWeight.w700,
@@ -179,8 +324,7 @@ class AccountsPage extends StatelessWidget {
                 child: _buildMetric(
                   context,
                   label: 'TOTAL ASSETS',
-                  value:
-                      'RM ${totalAssets.toStringAsFixed(2)}',
+                  value: '$_symbol ${totalAssets.toStringAsFixed(2)}',
                   icon: Icons.trending_up_rounded,
                   positive: true,
                 ),
@@ -192,8 +336,7 @@ class AccountsPage extends StatelessWidget {
                 child: _buildMetric(
                   context,
                   label: 'LIABILITIES',
-                  value:
-                      'RM ${totalLiabilities.toStringAsFixed(2)}',
+                  value: '$_symbol ${totalLiabilities.toStringAsFixed(2)}',
                   icon: Icons.credit_card_rounded,
                   positive: false,
                 ),
@@ -226,9 +369,7 @@ class AccountsPage extends StatelessWidget {
           Icon(
             icon,
             size: 20,
-            color: positive
-                ? colors.tertiary
-                : colors.error,
+            color: positive ? colors.tertiary : colors.error,
           ),
 
           const SizedBox(height: 8),
@@ -282,10 +423,7 @@ class AccountsPage extends StatelessWidget {
         const Spacer(),
 
         Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 9,
-            vertical: 4,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
           decoration: BoxDecoration(
             color: colors.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(999),
@@ -303,39 +441,40 @@ class AccountsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildAccountCard(
-    BuildContext context, {
-    required Account account,
-  }) {
+  Widget _buildAccountCard(BuildContext context, {required Account account}) {
     final colors = Theme.of(context).colorScheme;
 
     final currentBalance = AccountBalanceCalculator.calculate(
       account,
-      mockTransactions,
+      _transactions,
     );
 
     return Material(
       color: colors.surfaceContainerLowest,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
+        onTap: () async {
+          final updatedAccount = await Navigator.of(context).push<Account>(
             MaterialPageRoute(
               builder: (_) => AccountDetailPage(
                 account: account,
+                transactionRepository: widget.transactionRepository,
               ),
             ),
           );
+
+          if (updatedAccount == null) {
+            return;
+          }
+
+          await widget.repository.updateAccount(updatedAccount);
         },
         borderRadius: BorderRadius.circular(18),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              _buildAccountIcon(
-                context,
-                account.type,
-              ),
+              _buildAccountIcon(context, account.type),
 
               const SizedBox(width: 14),
 
@@ -368,16 +507,14 @@ class AccountsPage extends StatelessWidget {
                             ),
                             decoration: BoxDecoration(
                               color: colors.primaryContainer,
-                              borderRadius:
-                                  BorderRadius.circular(999),
+                              borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
                               'PRIMARY',
                               style: TextStyle(
                                 fontSize: 8,
                                 fontWeight: FontWeight.w700,
-                                color:
-                                    colors.onPrimaryContainer,
+                                color: colors.onPrimaryContainer,
                               ),
                             ),
                           ),
@@ -388,7 +525,7 @@ class AccountsPage extends StatelessWidget {
                     const SizedBox(height: 3),
 
                     Text(
-                      _accountTypeLabel(account.type),
+                      '${_accountTypeLabel(account.type)} · Native ${account.currencyCode}',
                       style: TextStyle(
                         fontSize: 11,
                         color: colors.onSurfaceVariant,
@@ -404,7 +541,7 @@ class AccountsPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    'RM ${currentBalance.toStringAsFixed(2)}',
+                    '$_symbol ${_convert(currentBalance, account).toStringAsFixed(2)}',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -428,40 +565,47 @@ class AccountsPage extends StatelessWidget {
     );
   }
 
-Widget _buildCreditAccountCard(
-  BuildContext context, {
-  required Account account,
-}) {
-  final colors = Theme.of(context).colorScheme;
+  Widget _buildCreditAccountCard(
+    BuildContext context, {
+    required Account account,
+  }) {
+    final colors = Theme.of(context).colorScheme;
 
-  final currentBalance = AccountBalanceCalculator.calculate(
-    account,
-    mockTransactions,
-  );
+    final currentBalance = AccountBalanceCalculator.calculate(
+      account,
+      _transactions,
+    );
 
-  final creditLimit = account.creditLimit ?? 0;
+    final creditLimit = account.creditLimit ?? 0;
 
-  final usage = creditLimit <= 0
-    ? 0.0
-    : (currentBalance / creditLimit)
-        .clamp(0.0, 1.0);
+    final usage = creditLimit <= 0
+        ? 0.0
+        : (currentBalance / creditLimit).clamp(0.0, 1.0);
 
-  final availableCredit =
-      (creditLimit - currentBalance)
-          .clamp(0.0, double.infinity);
+    final availableCredit = (creditLimit - currentBalance).clamp(
+      0.0,
+      double.infinity,
+    );
 
     return Material(
       color: colors.surfaceContainerLowest,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
+        onTap: () async {
+          final updatedAccount = await Navigator.of(context).push<Account>(
             MaterialPageRoute(
               builder: (_) => AccountDetailPage(
                 account: account,
+                transactionRepository: widget.transactionRepository,
               ),
             ),
           );
+
+          if (updatedAccount == null) {
+            return;
+          }
+
+          await widget.repository.updateAccount(updatedAccount);
         },
         borderRadius: BorderRadius.circular(18),
         child: Padding(
@@ -470,23 +614,18 @@ Widget _buildCreditAccountCard(
             children: [
               Row(
                 children: [
-                  _buildAccountIcon(
-                    context,
-                    account.type,
-                  ),
+                  _buildAccountIcon(context, account.type),
 
                   const SizedBox(width: 14),
 
                   Expanded(
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           account.name,
                           maxLines: 1,
-                          overflow:
-                              TextOverflow.ellipsis,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -500,8 +639,7 @@ Widget _buildCreditAccountCard(
                           'Credit Card',
                           style: TextStyle(
                             fontSize: 11,
-                            color:
-                                colors.onSurfaceVariant,
+                            color: colors.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -509,11 +647,10 @@ Widget _buildCreditAccountCard(
                   ),
 
                   Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        'RM ${currentBalance.toStringAsFixed(2)}',
+                        '$_symbol ${_convert(currentBalance, account).toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -524,11 +661,10 @@ Widget _buildCreditAccountCard(
                       const SizedBox(height: 3),
 
                       Text(
-                        'Outstanding',
+                        'Outstanding · Native ${account.currencyCode}',
                         style: TextStyle(
                           fontSize: 10,
-                          color:
-                              colors.onSurfaceVariant,
+                          color: colors.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -543,8 +679,7 @@ Widget _buildCreditAccountCard(
                 child: LinearProgressIndicator(
                   value: usage,
                   minHeight: 7,
-                  backgroundColor:
-                      colors.surfaceContainerHigh,
+                  backgroundColor: colors.surfaceContainerHigh,
                 ),
               ),
 
@@ -563,7 +698,7 @@ Widget _buildCreditAccountCard(
                   const Spacer(),
 
                   Text(
-                    'Available RM ${availableCredit.toStringAsFixed(2)}',
+                    'Available $_symbol ${_convert(availableCredit, account).toStringAsFixed(2)}',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
@@ -594,10 +729,7 @@ Widget _buildCreditAccountCard(
     );
   }
 
-  Widget _buildAccountIcon(
-    BuildContext context,
-    AccountType type,
-  ) {
+  Widget _buildAccountIcon(BuildContext context, AccountType type) {
     final colors = Theme.of(context).colorScheme;
 
     final IconData icon;
@@ -627,11 +759,7 @@ Widget _buildCreditAccountCard(
         color: colors.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Icon(
-        icon,
-        size: 22,
-        color: colors.primary,
-      ),
+      child: Icon(icon, size: 22, color: colors.primary),
     );
   }
 

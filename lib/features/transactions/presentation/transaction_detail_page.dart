@@ -1,28 +1,37 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 
+import '../data/transaction_repository.dart';
 import '../domain/transaction.dart';
 import 'edit_transaction_page.dart';
+import '../../../core/app_dependencies.dart';
+import '../../../core/currency/currency_catalog.dart';
+import '../../../core/currency/currency_converter.dart';
 
 class TransactionDetailPage extends StatefulWidget {
   const TransactionDetailPage({
     super.key,
     required this.transaction,
+    required this.repository,
   });
 
   final Transaction transaction;
+  final TransactionRepository repository;
 
   @override
-  State<TransactionDetailPage> createState() =>
-      _TransactionDetailPageState();
+  State<TransactionDetailPage> createState() => _TransactionDetailPageState();
 }
 
-class _TransactionDetailPageState
-    extends State<TransactionDetailPage> {
+class _TransactionDetailPageState extends State<TransactionDetailPage> {
   late Transaction _transaction;
+  String _baseCurrency = 'MYR';
+  CurrencyConverter _converter = CurrencyConverter('MYR');
+  String _nativeCurrency = 'MYR';
 
   Transaction get transaction => _transaction;
 
@@ -31,16 +40,36 @@ class _TransactionDetailPageState
     super.initState();
 
     _transaction = widget.transaction;
+    _loadPresentationCurrency();
   }
+
+  Future<void> _loadPresentationCurrency() async {
+    final settings = await appSettingsRepository.getSettings();
+    final account = await accountRepository.getAccountById(
+      transaction.accountId,
+    );
+    final base = settings?.baseCurrency ?? 'MYR';
+    final native = account?.currencyCode ?? 'MYR';
+    final converter = CurrencyConverter(base);
+    await converter.warm([native]);
+    if (mounted)
+      setState(() {
+        _baseCurrency = base;
+        _nativeCurrency = native;
+        _converter = converter;
+      });
+  }
+
+  String get _symbol => CurrencyCatalog.find(_baseCurrency).symbol;
+  double get _displayAmount =>
+      _converter.convert(transaction.amount, _nativeCurrency);
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Transaction Details'),
-      ),
+      appBar: AppBar(title: const Text('Transaction Details')),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -73,16 +102,14 @@ class _TransactionDetailPageState
                   onPressed: () async {
                     final updatedTransaction =
                         await Navigator.push<Transaction>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => EditTransactionPage(
-                          transaction: transaction,
-                        ),
-                      ),
-                    );
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                EditTransactionPage(transaction: transaction),
+                          ),
+                        );
 
-                    if (updatedTransaction == null ||
-                        !mounted) {
+                    if (updatedTransaction == null || !mounted) {
                       return;
                     }
 
@@ -90,12 +117,8 @@ class _TransactionDetailPageState
                       _transaction = updatedTransaction;
                     });
                   },
-                  icon: const Icon(
-                    Icons.edit_outlined,
-                  ),
-                  label: const Text(
-                    'Edit Transaction',
-                  ),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Edit Transaction'),
                 ),
               ),
 
@@ -105,19 +128,12 @@ class _TransactionDetailPageState
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: _confirmDelete,
-                  icon: const Icon(
-                    Icons.delete_outline_rounded,
-                  ),
-                  label: const Text(
-                    'Delete Transaction',
-                  ),
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('Delete Transaction'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor:
-                        Theme.of(context).colorScheme.error,
+                    foregroundColor: Theme.of(context).colorScheme.error,
                     side: BorderSide(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .error
+                      color: Theme.of(context).colorScheme.error
                           .withValues(alpha: 0.5),
                     ),
                   ),
@@ -130,16 +146,6 @@ class _TransactionDetailPageState
     );
   }
 
-  void _showDeletePreview() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Delete will be connected when local database storage is implemented.',
-        ),
-      ),
-    );
-  }
-
   Future<void> _confirmDelete() async {
     final colors = Theme.of(context).colorScheme;
 
@@ -147,13 +153,8 @@ class _TransactionDetailPageState
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          icon: Icon(
-            Icons.delete_outline_rounded,
-            color: colors.error,
-          ),
-          title: const Text(
-            'Delete Transaction?',
-          ),
+          icon: Icon(Icons.delete_outline_rounded, color: colors.error),
+          title: const Text('Delete Transaction?'),
           content: Text(
             'Are you sure you want to delete '
             '"${transaction.title}"?\n\n'
@@ -162,20 +163,14 @@ class _TransactionDetailPageState
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(
-                  dialogContext,
-                  false,
-                );
+                Navigator.pop(dialogContext, false);
               },
               child: const Text('Cancel'),
             ),
 
             FilledButton(
               onPressed: () {
-                Navigator.pop(
-                  dialogContext,
-                  true,
-                );
+                Navigator.pop(dialogContext, true);
               },
               style: FilledButton.styleFrom(
                 backgroundColor: colors.error,
@@ -192,13 +187,87 @@ class _TransactionDetailPageState
       return;
     }
 
-    _showDeletePreview();
+    try {
+      await widget.repository.deleteTransaction(transaction.id);
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete transaction: $error')),
+      );
+    }
   }
 
-  Widget _buildReceiptSection(
-    BuildContext context,
-  ) {
+  Future<void> _showReceiptPreview() async {
+    final receiptPath = transaction.receiptPath;
+
+    if (receiptPath == null) {
+      return;
+    }
+
+    final receiptFile = File(receiptPath);
+
+    if (!await receiptFile.exists()) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Receipt image could not be found.')),
+      );
+
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          insetPadding: const EdgeInsets.all(20),
+          child: Stack(
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: 600,
+                  maxHeight: 700,
+                ),
+                child: InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 4,
+                  child: Image.file(receiptFile, fit: BoxFit.contain),
+                ),
+              ),
+
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton.filledTonal(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildReceiptSection(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final receiptFile = File(transaction.receiptPath!);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -213,72 +282,78 @@ class _TransactionDetailPageState
 
         const SizedBox(height: 8),
 
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: colors.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(
-                    AppRadius.md,
+        InkWell(
+          onTap: _showReceiptPreview,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: Image.file(
+                    receiptFile,
+                    width: 48,
+                    height: 56,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) {
+                      return Container(
+                        width: 48,
+                        height: 56,
+                        color: colors.surfaceContainerHigh,
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      );
+                    },
                   ),
                 ),
-                child: Icon(
-                  Icons.receipt_long_outlined,
-                  color: colors.primary,
-                ),
-              ),
 
-              const SizedBox(width: AppSpacing.sm),
+                const SizedBox(width: AppSpacing.sm),
 
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      transaction.receiptPath!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: colors.onSurface,
-                        fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Receipt attached',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: colors.onSurface,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
 
-                    const SizedBox(height: 2),
+                      const SizedBox(height: 2),
 
-                    Text(
-                      'Receipt attached',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: colors.onSurfaceVariant,
+                      Text(
+                        'Tap to view or zoom',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              Icon(
-                Icons.chevron_right_rounded,
-                color: colors.onSurfaceVariant,
-              ),
-            ],
+                Icon(
+                  Icons.open_in_full_rounded,
+                  color: colors.onSurfaceVariant,
+                ),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildTagsSection(
-    BuildContext context,
-  ) {
+  Widget _buildTagsSection(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return Column(
@@ -297,37 +372,28 @@ class _TransactionDetailPageState
         Wrap(
           spacing: 6,
           runSpacing: 6,
-          children: transaction.tags.map(
-            (tag) {
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 5,
+          children: transaction.tags.map((tag) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainer,
+                borderRadius: BorderRadius.circular(AppRadius.full),
+              ),
+              child: Text(
+                '#$tag',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: colors.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
                 ),
-                decoration: BoxDecoration(
-                  color: colors.surfaceContainer,
-                  borderRadius: BorderRadius.circular(
-                    AppRadius.full,
-                  ),
-                ),
-                child: Text(
-                  '#$tag',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: colors.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              );
-            },
-          ).toList(),
+              ),
+            );
+          }).toList(),
         ),
       ],
     );
   }
 
-  Widget _buildNoteSection(
-    BuildContext context,
-  ) {
+  Widget _buildNoteSection(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return Row(
@@ -376,17 +442,13 @@ class _TransactionDetailPageState
     );
   }
 
-  Widget _buildAdditionalInformation(
-    BuildContext context,
-  ) {
+  Widget _buildAdditionalInformation(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     final hasNote =
-        transaction.note != null &&
-        transaction.note!.trim().isNotEmpty;
+        transaction.note != null && transaction.note!.trim().isNotEmpty;
 
-    final hasTags =
-        transaction.tags.isNotEmpty;
+    final hasTags = transaction.tags.isNotEmpty;
 
     final hasReceipt =
         transaction.receiptPath != null &&
@@ -399,9 +461,7 @@ class _TransactionDetailPageState
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.45,
-          ),
+          color: colors.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
       child: Column(
@@ -437,12 +497,10 @@ class _TransactionDetailPageState
   }
 
   bool get _hasAdditionalInformation {
-  final hasNote =
-        transaction.note != null &&
-        transaction.note!.trim().isNotEmpty;
+    final hasNote =
+        transaction.note != null && transaction.note!.trim().isNotEmpty;
 
-    final hasTags =
-        transaction.tags.isNotEmpty;
+    final hasTags = transaction.tags.isNotEmpty;
 
     final hasReceipt =
         transaction.receiptPath != null &&
@@ -455,9 +513,7 @@ class _TransactionDetailPageState
     final colors = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: AppSpacing.sm,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Divider(
         height: 1,
         color: colors.outlineVariant.withValues(alpha: 0.45),
@@ -483,11 +539,7 @@ class _TransactionDetailPageState
             color: colors.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
-          child: Icon(
-            icon,
-            size: 20,
-            color: colors.primary,
-          ),
+          child: Icon(icon, size: 20, color: colors.primary),
         ),
 
         const SizedBox(width: AppSpacing.sm),
@@ -533,9 +585,7 @@ class _TransactionDetailPageState
         ),
 
         Padding(
-          padding: const EdgeInsets.symmetric(
-            vertical: AppSpacing.sm,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
           child: Row(
             children: [
               Expanded(
@@ -557,7 +607,7 @@ class _TransactionDetailPageState
                     const SizedBox(height: 3),
 
                     Text(
-                      'RM ${transaction.amount.abs().toStringAsFixed(2)}',
+                      '$_symbol ${_displayAmount.abs().toStringAsFixed(2)} · native $_nativeCurrency',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: colors.primary,
                         fontWeight: FontWeight.w700,
@@ -668,15 +718,13 @@ class _TransactionDetailPageState
     switch (transaction.type) {
       case TransactionType.expense:
         accentColor = colors.error;
-        iconBackground =
-            colors.errorContainer.withValues(alpha: 0.55);
+        iconBackground = colors.errorContainer.withValues(alpha: 0.55);
         icon = Icons.shopping_bag_outlined;
         break;
 
       case TransactionType.income:
         accentColor = colors.tertiary;
-        iconBackground =
-            colors.tertiaryContainer.withValues(alpha: 0.55);
+        iconBackground = colors.tertiaryContainer.withValues(alpha: 0.55);
         icon = Icons.payments_outlined;
         break;
 
@@ -706,11 +754,7 @@ class _TransactionDetailPageState
               color: iconBackground,
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              icon,
-              size: 28,
-              color: accentColor,
-            ),
+            child: Icon(icon, size: 28, color: accentColor),
           ),
 
           const SizedBox(height: AppSpacing.sm),
@@ -728,18 +772,13 @@ class _TransactionDetailPageState
 
           Text(
             _formattedAmount,
-            style: AppTextStyles.displayHeroMobile.copyWith(
-              color: accentColor,
-            ),
+            style: AppTextStyles.displayHeroMobile.copyWith(color: accentColor),
           ),
 
           const SizedBox(height: AppSpacing.sm),
 
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 5,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: colors.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(AppRadius.full),
@@ -767,17 +806,17 @@ class _TransactionDetailPageState
   }
 
   String get _formattedAmount {
-    final amount = transaction.amount.abs().toStringAsFixed(2);
+    final amount = _displayAmount.abs().toStringAsFixed(2);
 
     switch (transaction.type) {
       case TransactionType.expense:
-        return '− RM $amount';
+        return '− $_symbol $amount';
 
       case TransactionType.income:
-        return '+ RM $amount';
+        return '+ $_symbol $amount';
 
       case TransactionType.transfer:
-        return 'RM $amount';
+        return '$_symbol $amount';
     }
   }
 
@@ -815,8 +854,8 @@ class _TransactionDetailPageState
     final hour = date.hour == 0
         ? 12
         : date.hour > 12
-            ? date.hour - 12
-            : date.hour;
+        ? date.hour - 12
+        : date.hour;
 
     final minute = date.minute.toString().padLeft(2, '0');
     final period = date.hour >= 12 ? 'PM' : 'AM';

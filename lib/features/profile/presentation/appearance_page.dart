@@ -9,20 +9,32 @@ class AppearancePage extends StatefulWidget {
   const AppearancePage({super.key});
 
   @override
-  State<AppearancePage> createState() =>
-      _AppearancePageState();
+  State<AppearancePage> createState() => _AppearancePageState();
 }
 
 class _AppearancePageState extends State<AppearancePage> {
+  Future<void> _setThemeMode(ThemeMode themeMode) async {
+    setState(() {
+      themeModeNotifier.value = themeMode;
+    });
+
+    try {
+      await themePreferences.saveThemeMode(themeMode);
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save your theme preference.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Appearance'),
-      ),
+      appBar: AppBar(title: const Text('Appearance')),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -49,13 +61,8 @@ class _AppearancePageState extends State<AppearancePage> {
                 icon: Icons.settings_brightness_rounded,
                 title: 'System Default',
                 subtitle: 'Follow your device appearance',
-                selected:
-                    themeModeNotifier.value == ThemeMode.system,
-                onTap: () {
-                  setState(() {
-                    themeModeNotifier.value = ThemeMode.system;
-                  });
-                },
+                selected: themeModeNotifier.value == ThemeMode.system,
+                onTap: () => _setThemeMode(ThemeMode.system),
               ),
 
               const SizedBox(height: AppSpacing.sm),
@@ -64,13 +71,8 @@ class _AppearancePageState extends State<AppearancePage> {
                 icon: Icons.light_mode_outlined,
                 title: 'Light',
                 subtitle: 'Always use light mode',
-                selected:
-                    themeModeNotifier.value == ThemeMode.light,
-                onTap: () {
-                  setState(() {
-                    themeModeNotifier.value = ThemeMode.light;
-                  });
-                },
+                selected: themeModeNotifier.value == ThemeMode.light,
+                onTap: () => _setThemeMode(ThemeMode.light),
               ),
 
               const SizedBox(height: AppSpacing.sm),
@@ -79,13 +81,8 @@ class _AppearancePageState extends State<AppearancePage> {
                 icon: Icons.dark_mode_outlined,
                 title: 'Dark',
                 subtitle: 'Always use dark mode',
-                selected:
-                    themeModeNotifier.value == ThemeMode.dark,
-                onTap: () {
-                  setState(() {
-                    themeModeNotifier.value = ThemeMode.dark;
-                  });
-                },
+                selected: themeModeNotifier.value == ThemeMode.dark,
+                onTap: () => _setThemeMode(ThemeMode.dark),
               ),
             ],
           ),
@@ -116,29 +113,19 @@ class _AppearanceOption extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(
-        AppRadius.xl,
-      ),
+      borderRadius: BorderRadius.circular(AppRadius.xl),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(
-          AppSpacing.md,
-        ),
+        padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: selected
-              ? colors.primaryContainer.withValues(
-                  alpha: 0.35,
-                )
+              ? colors.primaryContainer.withValues(alpha: 0.35)
               : colors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(
-            AppRadius.xl,
-          ),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
           border: Border.all(
             color: selected
                 ? colors.primary
-                : colors.outlineVariant.withValues(
-                    alpha: 0.4,
-                  ),
+                : colors.outlineVariant.withValues(alpha: 0.4),
           ),
         ),
         child: Row(
@@ -150,9 +137,7 @@ class _AppearanceOption extends StatelessWidget {
                 color: selected
                     ? colors.primaryContainer
                     : colors.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(
-                  AppRadius.md,
-                ),
+                borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               child: Icon(
                 icon,
@@ -166,13 +151,11 @@ class _AppearanceOption extends StatelessWidget {
 
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style:
-                        AppTextStyles.bodyMedium.copyWith(
+                    style: AppTextStyles.bodyMedium.copyWith(
                       color: colors.onSurface,
                       fontWeight: FontWeight.w700,
                     ),
@@ -182,8 +165,7 @@ class _AppearanceOption extends StatelessWidget {
 
                   Text(
                     subtitle,
-                    style:
-                        AppTextStyles.bodySmall.copyWith(
+                    style: AppTextStyles.bodySmall.copyWith(
                       color: colors.onSurfaceVariant,
                     ),
                   ),
@@ -195,9 +177,7 @@ class _AppearanceOption extends StatelessWidget {
               selected
                   ? Icons.check_circle_rounded
                   : Icons.radio_button_unchecked_rounded,
-              color: selected
-                  ? colors.primary
-                  : colors.onSurfaceVariant,
+              color: selected ? colors.primary : colors.onSurfaceVariant,
             ),
           ],
         ),

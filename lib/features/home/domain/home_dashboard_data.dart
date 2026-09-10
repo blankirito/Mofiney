@@ -41,10 +41,7 @@ class HomeDashboardData {
       return 0;
     }
 
-    return (monthlyBudget! - monthlySpent).clamp(
-      0,
-      double.infinity,
-    );
+    return (monthlyBudget! - monthlySpent).clamp(0, double.infinity);
   }
 
   double? get budgetUsedPercentage {
@@ -70,8 +67,6 @@ class HomeDashboardData {
       return 0;
     }
 
-    return dailySpending.reduce(
-      (a, b) => a > b ? a : b,
-    );
+    return dailySpending.reduce((a, b) => a > b ? a : b);
   }
 }

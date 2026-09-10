@@ -39,12 +39,7 @@ class _CurrencyPageState extends State<CurrencyPage> {
       name: 'United States Dollar',
       subtitle: 'United States Dollar',
     ),
-    CurrencyOption(
-      code: 'EUR',
-      symbol: '€',
-      name: 'Euro',
-      subtitle: 'Euro',
-    ),
+    CurrencyOption(code: 'EUR', symbol: '€', name: 'Euro', subtitle: 'Euro'),
     CurrencyOption(
       code: 'IDR',
       symbol: 'Rp',
@@ -131,8 +126,7 @@ class _CurrencyPageState extends State<CurrencyPage> {
 
                     ...filteredCurrencies.map(
                       (currency) => Padding(
-                        padding:
-                            const EdgeInsets.only(bottom: AppSpacing.sm),
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                         child: _CurrencyCard(
                           currency: currency,
                           selected: selectedCurrency == currency.code,
@@ -164,9 +158,7 @@ class _CurrencyPageState extends State<CurrencyPage> {
                 );
 
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => BudgetPage(data: data),
-                  ),
+                  MaterialPageRoute(builder: (_) => BudgetPage(data: data)),
                 );
               },
             ),
@@ -269,8 +261,9 @@ class _CurrencyCard extends StatelessWidget {
                             ),
                             decoration: BoxDecoration(
                               color: colors.primary,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.full),
+                              borderRadius: BorderRadius.circular(
+                                AppRadius.full,
+                              ),
                             ),
                             child: Text(
                               'Default',
@@ -327,10 +320,7 @@ class _CurrencyCard extends StatelessWidget {
 }
 
 class _BottomAction extends StatelessWidget {
-  const _BottomAction({
-    required this.label,
-    required this.onPressed,
-  });
+  const _BottomAction({required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback onPressed;

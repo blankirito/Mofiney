@@ -1,20 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../transactions/data/mock_transactions.dart';
-import '../../transactions/domain/transaction.dart';
-import '../../accounts/data/mock_accounts.dart';
 
-enum SpendingPeriod {
-  month,
-  threeMonths,
-  sixMonths,
-  year,
-}
+import '../../transactions/domain/transaction.dart';
+
+import '../../accounts/domain/account.dart';
+
+enum SpendingPeriod { month, threeMonths, sixMonths, year }
 
 class SpendingDateRange {
-  const SpendingDateRange({
-    required this.start,
-    required this.end,
-  });
+  const SpendingDateRange({required this.start, required this.end});
 
   final DateTime start;
   final DateTime end;
@@ -25,62 +18,109 @@ class SpendingDateRange {
 }
 
 class SpendingBucket {
-  const SpendingBucket({
-    required this.label,
-    required this.amount,
-  });
+  const SpendingBucket({required this.label, required this.amount});
 
   final String label;
   final double amount;
 }
 
 class SpendingAnalysisPage extends StatefulWidget {
-  const SpendingAnalysisPage({super.key});
+  const SpendingAnalysisPage({
+    super.key,
+    required this.transactions,
+    required this.accounts,
+  });
+
+  final List<Transaction> transactions;
+  final List<Account> accounts;
 
   @override
-  State<SpendingAnalysisPage> createState() =>
-      _SpendingAnalysisPageState();
+  State<SpendingAnalysisPage> createState() => _SpendingAnalysisPageState();
 }
 
 class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
   SpendingPeriod _selectedPeriod = SpendingPeriod.month;
 
-  final DateTime _referenceDate = DateTime(2026, 9, 1);
+  DateTime get _referenceDate => DateTime.now();
 
-  List<Transaction> get _transactions => mockTransactions;
-  
-  bool _isExpenseInSelectedPeriod(
-    Transaction transaction,
-  ) {
+  List<Transaction> get _transactions => widget.transactions;
+
+  bool _isExpenseInSelectedPeriod(Transaction transaction) {
     return transaction.type == TransactionType.expense &&
         _isInSelectedPeriod(transaction);
   }
 
   bool _isInSelectedPeriod(Transaction transaction) {
-    return _selectedDateRange.contains(
-      transaction.dateTime,
-    );
+    return _selectedDateRange.contains(transaction.dateTime);
   }
 
-  int get _daysInSelectedPeriod {
-    return _selectedDateRange.end
-        .difference(_selectedDateRange.start)
-        .inDays;
+  int get _elapsedDaysInSelectedPeriod {
+    final now = DateTime.now();
+    final range = _selectedDateRange;
+
+    if (now.isBefore(range.start)) {
+      return 0;
+    }
+
+    if (!now.isBefore(range.end)) {
+      return range.end.difference(range.start).inDays;
+    }
+
+    return now.difference(range.start).inDays + 1;
+  }
+
+  double get _dailyPace {
+    final days = _elapsedDaysInSelectedPeriod;
+
+    if (days <= 0) {
+      return 0;
+    }
+
+    return _totalExpenses / days;
+  }
+
+  String _longMonthName(int month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+
+    return months[month - 1];
   }
 
   String get _periodLabel {
     switch (_selectedPeriod) {
       case SpendingPeriod.month:
-        return 'September 2026';
+        return '${_longMonthName(_referenceDate.month)} ${_referenceDate.year}';
 
       case SpendingPeriod.threeMonths:
-        return 'Jul - Sep 2026';
+        final start = DateTime(_referenceDate.year, _referenceDate.month - 2);
+
+        return '${_shortMonthName(start.month)}'
+            ' - '
+            '${_shortMonthName(_referenceDate.month)} '
+            '${_referenceDate.year}';
 
       case SpendingPeriod.sixMonths:
-        return 'Apr - Sep 2026';
+        final start = DateTime(_referenceDate.year, _referenceDate.month - 5);
+
+        return '${_shortMonthName(start.month)}'
+            ' - '
+            '${_shortMonthName(_referenceDate.month)} '
+            '${_referenceDate.year}';
 
       case SpendingPeriod.year:
-        return '2026';
+        return '${_referenceDate.year}';
     }
   }
 
@@ -88,58 +128,26 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
     switch (_selectedPeriod) {
       case SpendingPeriod.month:
         return SpendingDateRange(
-          start: DateTime(
-            _referenceDate.year,
-            _referenceDate.month,
-            1,
-          ),
-          end: DateTime(
-            _referenceDate.year,
-            _referenceDate.month + 1,
-            1,
-          ),
+          start: DateTime(_referenceDate.year, _referenceDate.month, 1),
+          end: DateTime(_referenceDate.year, _referenceDate.month + 1, 1),
         );
 
       case SpendingPeriod.threeMonths:
         return SpendingDateRange(
-          start: DateTime(
-            _referenceDate.year,
-            _referenceDate.month - 2,
-            1,
-          ),
-          end: DateTime(
-            _referenceDate.year,
-            _referenceDate.month + 1,
-            1,
-          ),
+          start: DateTime(_referenceDate.year, _referenceDate.month - 2, 1),
+          end: DateTime(_referenceDate.year, _referenceDate.month + 1, 1),
         );
 
       case SpendingPeriod.sixMonths:
         return SpendingDateRange(
-          start: DateTime(
-            _referenceDate.year,
-            _referenceDate.month - 5,
-            1,
-          ),
-          end: DateTime(
-            _referenceDate.year,
-            _referenceDate.month + 1,
-            1,
-          ),
+          start: DateTime(_referenceDate.year, _referenceDate.month - 5, 1),
+          end: DateTime(_referenceDate.year, _referenceDate.month + 1, 1),
         );
 
       case SpendingPeriod.year:
         return SpendingDateRange(
-          start: DateTime(
-            _referenceDate.year,
-            1,
-            1,
-          ),
-          end: DateTime(
-            _referenceDate.year + 1,
-            1,
-            1,
-          ),
+          start: DateTime(_referenceDate.year, 1, 1),
+          end: DateTime(_referenceDate.year + 1, 1, 1),
         );
     }
   }
@@ -157,15 +165,10 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
   double get _previousTotalExpenses {
     return _transactions
         .where(_isExpenseInPreviousPeriod)
-        .fold<double>(
-          0,
-          (sum, transaction) => sum + transaction.amount,
-        );
+        .fold<double>(0, (sum, transaction) => sum + transaction.amount);
   }
 
-  bool _isExpenseInPreviousPeriod(
-    Transaction transaction,
-  ) {
+  bool _isExpenseInPreviousPeriod(Transaction transaction) {
     return transaction.type == TransactionType.expense &&
         _previousDateRange.contains(transaction.dateTime);
   }
@@ -176,18 +179,15 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
     switch (_selectedPeriod) {
       case SpendingPeriod.month:
         return SpendingDateRange(
-          start: DateTime(
-            current.start.year,
-            current.start.month - 1,
-            1,
-          ),
+          start: DateTime(current.start.year, current.start.month - 1, 1),
           end: current.start,
         );
 
       case SpendingPeriod.threeMonths:
       case SpendingPeriod.sixMonths:
-        final durationInMonths =
-            _selectedPeriod == SpendingPeriod.threeMonths ? 3 : 6;
+        final durationInMonths = _selectedPeriod == SpendingPeriod.threeMonths
+            ? 3
+            : 6;
 
         return SpendingDateRange(
           start: DateTime(
@@ -200,11 +200,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
       case SpendingPeriod.year:
         return SpendingDateRange(
-          start: DateTime(
-            current.start.year - 1,
-            1,
-            1,
-          ),
+          start: DateTime(current.start.year - 1, 1, 1),
           end: current.start,
         );
     }
@@ -217,11 +213,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
     final buckets = <SpendingBucket>[];
 
     for (int i = 0; i < count; i++) {
-      final date = DateTime(
-        _referenceDate.year,
-        startMonth + i,
-        1,
-      );
+      final date = DateTime(_referenceDate.year, startMonth + i, 1);
 
       double total = 0;
 
@@ -230,17 +222,13 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
             transaction.dateTime.year == date.year &&
             transaction.dateTime.month == date.month;
 
-        if (sameMonth &&
-            transaction.type == TransactionType.expense) {
+        if (sameMonth && transaction.type == TransactionType.expense) {
           total += transaction.amount;
         }
       }
 
       buckets.add(
-        SpendingBucket(
-          label: _shortMonthName(date.month),
-          amount: total,
-        ),
+        SpendingBucket(label: _shortMonthName(date.month), amount: total),
       );
     }
 
@@ -274,10 +262,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
     return List.generate(
       4,
-      (index) => SpendingBucket(
-        label: 'W${index + 1}',
-        amount: totals[index],
-      ),
+      (index) => SpendingBucket(label: 'W${index + 1}', amount: totals[index]),
     );
   }
 
@@ -299,25 +284,16 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
         );
 
       case SpendingPeriod.year:
-        return _buildMonthlyBuckets(
-          startMonth: 1,
-          count: 12,
-        );
+        return _buildMonthlyBuckets(startMonth: 1, count: 12);
     }
   }
 
-  List<SpendingBucket> _buildPreviousMonthlyBuckets({
-    required int count,
-  }) {
+  List<SpendingBucket> _buildPreviousMonthlyBuckets({required int count}) {
     final range = _previousDateRange;
     final buckets = <SpendingBucket>[];
 
     for (int i = 0; i < count; i++) {
-      final date = DateTime(
-        range.start.year,
-        range.start.month + i,
-        1,
-      );
+      final date = DateTime(range.start.year, range.start.month + i, 1);
 
       double total = 0;
 
@@ -326,17 +302,13 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
             transaction.dateTime.year == date.year &&
             transaction.dateTime.month == date.month;
 
-        if (sameMonth &&
-            transaction.type == TransactionType.expense) {
+        if (sameMonth && transaction.type == TransactionType.expense) {
           total += transaction.amount;
         }
       }
 
       buckets.add(
-        SpendingBucket(
-          label: _shortMonthName(date.month),
-          amount: total,
-        ),
+        SpendingBucket(label: _shortMonthName(date.month), amount: total),
       );
     }
 
@@ -370,10 +342,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
     return List.generate(
       4,
-      (index) => SpendingBucket(
-        label: 'W${index + 1}',
-        amount: totals[index],
-      ),
+      (index) => SpendingBucket(label: 'W${index + 1}', amount: totals[index]),
     );
   }
 
@@ -383,19 +352,13 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
         return _buildPreviousWeeklyBuckets();
 
       case SpendingPeriod.threeMonths:
-        return _buildPreviousMonthlyBuckets(
-          count: 3,
-        );
+        return _buildPreviousMonthlyBuckets(count: 3);
 
       case SpendingPeriod.sixMonths:
-        return _buildPreviousMonthlyBuckets(
-          count: 6,
-        );
+        return _buildPreviousMonthlyBuckets(count: 6);
 
       case SpendingPeriod.year:
-        return _buildPreviousMonthlyBuckets(
-          count: 12,
-        );
+        return _buildPreviousMonthlyBuckets(count: 12);
     }
   }
 
@@ -436,7 +399,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
   }
 
   String _accountName(String accountId) {
-    for (final account in mockAccounts) {
+    for (final account in widget.accounts) {
       if (account.id == accountId) {
         return account.name;
       }
@@ -451,8 +414,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
     }
 
     return _categoryExpenses.entries.reduce(
-      (current, next) =>
-          next.value > current.value ? next : current,
+      (current, next) => next.value > current.value ? next : current,
     );
   }
 
@@ -464,21 +426,16 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
         continue;
       }
 
-      counts.update(
-        transaction.title,
-        (count) => count + 1,
-        ifAbsent: () => 1,
-      );
+      counts.update(transaction.title, (count) => count + 1, ifAbsent: () => 1);
     }
 
     if (counts.isEmpty) {
       return null;
     }
 
-    return counts.entries.reduce(
-      (current, next) =>
-          next.value > current.value ? next : current,
-    ).key;
+    return counts.entries
+        .reduce((current, next) => next.value > current.value ? next : current)
+        .key;
   }
 
   MapEntry<DateTime, double>? get _highestSpendingDay {
@@ -507,17 +464,14 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
     }
 
     return totals.entries.reduce(
-      (current, next) =>
-          next.value > current.value ? next : current,
+      (current, next) => next.value > current.value ? next : current,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Spending Analytics'),
-      ),
+      appBar: AppBar(title: const Text('Spending Analytics')),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -581,11 +535,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
             color: colors.primaryContainer,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
-            icon,
-            size: 20,
-            color: colors.onPrimaryContainer,
-          ),
+          child: Icon(icon, size: 20, color: colors.onPrimaryContainer),
         ),
 
         const SizedBox(width: 12),
@@ -630,9 +580,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
     );
   }
 
-  Widget _buildKeyObservationsCard(
-    BuildContext context,
-  ) {
+  Widget _buildKeyObservationsCard(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     final leadCategory = _leadCategory;
@@ -645,11 +593,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.4,
-          ),
-        ),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -670,9 +614,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
             context,
             icon: Icons.pie_chart_outline_rounded,
             label: 'LEAD CATEGORY',
-            value: leadCategory == null
-                ? 'No data'
-                : leadCategory.key,
+            value: leadCategory == null ? 'No data' : leadCategory.key,
             detail: leadCategory == null
                 ? null
                 : 'RM ${leadCategory.value.toStringAsFixed(2)}',
@@ -703,9 +645,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
           const SizedBox(height: 18),
 
-          Divider(
-            color: colors.outlineVariant,
-          ),
+          Divider(color: colors.outlineVariant),
 
           const SizedBox(height: 10),
 
@@ -767,14 +707,10 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
   }) {
     final colors = Theme.of(context).colorScheme;
 
-    final percentage = _totalExpenses <= 0
-        ? 0.0
-        : amount / _totalExpenses;
+    final percentage = _totalExpenses <= 0 ? 0.0 : amount / _totalExpenses;
 
     return Padding(
-      padding: const EdgeInsets.only(
-        bottom: 16,
-      ),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         children: [
           Container(
@@ -795,8 +731,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   _accountName(accountId),
@@ -821,19 +756,14 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
           Text(
             'RM ${amount.toStringAsFixed(2)}',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAccountBreakdownCard(
-    BuildContext context,
-  ) {
+  Widget _buildAccountBreakdownCard(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     final entries = _accountExpenses.entries.toList()
@@ -845,11 +775,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.4,
-          ),
-        ),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -868,10 +794,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
           Text(
             'Expense distribution across accounts',
-            style: TextStyle(
-              fontSize: 12,
-              color: colors.onSurfaceVariant,
-            ),
+            style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
           ),
 
           const SizedBox(height: 16),
@@ -895,9 +818,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
   }) {
     final colors = Theme.of(context).colorScheme;
 
-    final percentage = _totalExpenses <= 0
-        ? 0.0
-        : amount / _totalExpenses;
+    final percentage = _totalExpenses <= 0 ? 0.0 : amount / _totalExpenses;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -966,9 +887,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.4),
-        ),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -987,10 +906,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
           Text(
             '${entries.length} recorded expense classifications',
-            style: TextStyle(
-              fontSize: 12,
-              color: colors.onSurfaceVariant,
-            ),
+            style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
           ),
 
           const SizedBox(height: 16),
@@ -1023,16 +939,12 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
     }
   }
 
-  Widget _buildWeeklyTrajectoryCard(
-    BuildContext context,
-  ) {
+  Widget _buildWeeklyTrajectoryCard(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final buckets = _trajectoryBuckets;
     final previousBuckets = _previousTrajectoryBuckets;
 
-    final values = buckets
-        .map((bucket) => bucket.amount)
-        .toList();
+    final values = buckets.map((bucket) => bucket.amount).toList();
 
     final previousValues = previousBuckets
         .map((bucket) => bucket.amount)
@@ -1044,11 +956,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.4,
-          ),
-        ),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1067,10 +975,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
           Text(
             _trajectorySubtitle,
-            style: TextStyle(
-              fontSize: 12,
-              color: colors.onSurfaceVariant,
-            ),
+            style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
           ),
 
           const SizedBox(height: 10),
@@ -1103,9 +1008,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
                 width: 18,
                 height: 3,
                 child: CustomPaint(
-                  painter: _LegendDashPainter(
-                    color: colors.outline,
-                  ),
+                  painter: _LegendDashPainter(color: colors.outline),
                 ),
               ),
 
@@ -1192,10 +1095,10 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
     final sign = showSign
         ? amount > 0
-            ? '+'
-            : amount < 0
-                ? '-'
-                : ''
+              ? '+'
+              : amount < 0
+              ? '-'
+              : ''
         : '';
 
     return Container(
@@ -1207,11 +1110,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon,
-            size: 18,
-            color: color,
-          ),
+          Icon(icon, size: 18, color: color),
 
           const SizedBox(height: 10),
 
@@ -1242,9 +1141,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
     );
   }
 
-  Widget _buildCashFlowDynamicsCard(
-    BuildContext context,
-  ) {
+  Widget _buildCashFlowDynamicsCard(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return Container(
@@ -1253,11 +1150,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.4,
-          ),
-        ),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1308,9 +1201,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
                       : Icons.trending_down_rounded,
                   label: 'NET',
                   amount: _netCashFlow,
-                  color: _netCashFlow >= 0
-                      ? colors.primary
-                      : colors.error,
+                  color: _netCashFlow >= 0 ? colors.primary : colors.error,
                   showSign: true,
                 ),
               ),
@@ -1321,9 +1212,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
     );
   }
 
-  Widget _buildTotalExpendituresCard(
-    BuildContext context,
-  ) {
+  Widget _buildTotalExpendituresCard(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final change = _expenseChangePercentage;
 
@@ -1333,11 +1222,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.4,
-          ),
-        ),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1347,8 +1232,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
             children: [
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'TOTAL EXPENDITURES',
@@ -1381,40 +1265,39 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
                 ),
                 decoration: BoxDecoration(
                   color: colors.surfaceContainer,
-                  borderRadius:
-                      BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
                       change == null
-                        ? Icons.remove_rounded
-                        : change <= 0
-                            ? Icons.arrow_downward_rounded
-                            : Icons.arrow_upward_rounded,
+                          ? Icons.remove_rounded
+                          : change <= 0
+                          ? Icons.arrow_downward_rounded
+                          : Icons.arrow_upward_rounded,
                       size: 15,
                       color: change == null
-                        ? colors.onSurfaceVariant
-                        : change <= 0
-                            ? colors.tertiary
-                            : colors.error,
+                          ? colors.onSurfaceVariant
+                          : change <= 0
+                          ? colors.tertiary
+                          : colors.error,
                     ),
 
                     const SizedBox(width: 4),
 
                     Text(
                       change == null
-                        ? 'N/A'
-                        : '${change.abs().toStringAsFixed(1)}%',
+                          ? 'N/A'
+                          : '${change.abs().toStringAsFixed(1)}%',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: change == null
-                          ? colors.onSurfaceVariant
-                          : change <= 0
-                              ? colors.tertiary
-                              : colors.error,
+                            ? colors.onSurfaceVariant
+                            : change <= 0
+                            ? colors.tertiary
+                            : colors.error,
                       ),
                     ),
                   ],
@@ -1426,13 +1309,8 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
           const SizedBox(height: 6),
 
           Text(
-            change == null
-                ? 'No previous-period data'
-                : 'vs previous period',
-            style: TextStyle(
-              fontSize: 10,
-              color: colors.onSurfaceVariant,
-            ),
+            change == null ? 'No previous-period data' : 'vs previous period',
+            style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant),
           ),
 
           const SizedBox(height: 18),
@@ -1452,10 +1330,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
               Text(
                 'Daily Pace:',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: colors.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
               ),
 
               const SizedBox(width: 5),
@@ -1472,14 +1347,10 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
               ),
 
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
                   color: colors.tertiaryContainer,
-                  borderRadius:
-                      BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   'On Target',
@@ -1504,31 +1375,17 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
               transaction.type == TransactionType.income &&
               _isInSelectedPeriod(transaction),
         )
-        .fold<double>(
-          0,
-          (sum, transaction) => sum + transaction.amount,
-        );
+        .fold<double>(0, (sum, transaction) => sum + transaction.amount);
   }
 
   double get _netCashFlow {
     return _totalIncome - _totalExpenses;
   }
 
-  double get _dailyPace {
-    if (_daysInSelectedPeriod == 0) {
-      return 0;
-    }
-
-    return _totalExpenses / _daysInSelectedPeriod;
-  }
-
   double get _totalExpenses {
     return _transactions
         .where(_isExpenseInSelectedPeriod)
-        .fold<double>(
-          0,
-          (sum, transaction) => sum + transaction.amount,
-        );
+        .fold<double>(0, (sum, transaction) => sum + transaction.amount);
   }
 
   Widget _buildHeader(BuildContext context) {
@@ -1539,20 +1396,15 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
       children: [
         Text(
           'Spending Analytics',
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+          style: Theme.of(context).textTheme.headlineMedium
+              ?.copyWith(fontWeight: FontWeight.w700),
         ),
 
         const SizedBox(height: 4),
 
         Row(
           children: [
-            Icon(
-              Icons.calendar_today_rounded,
-              size: 15,
-              color: colors.primary,
-            ),
+            Icon(Icons.calendar_today_rounded, size: 15, color: colors.primary),
 
             const SizedBox(width: 6),
 
@@ -1579,7 +1431,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
             const SizedBox(width: 8),
 
             Text(
-              '$_daysInSelectedPeriod DAYS LOGGED',
+              '$_elapsedDaysInSelectedPeriod DAYS ELAPSED',
               style: TextStyle(
                 fontSize: 10,
                 letterSpacing: 0.7,
@@ -1647,9 +1499,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
         borderRadius: BorderRadius.circular(8),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(
-            vertical: 9,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(
             color: selected
                 ? colors.surfaceContainerLowest
@@ -1662,9 +1512,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: selected
-                  ? colors.primary
-                  : colors.onSurfaceVariant,
+              color: selected ? colors.primary : colors.onSurfaceVariant,
             ),
           ),
         ),
@@ -1703,51 +1551,30 @@ class _TrajectoryPainter extends CustomPainter {
     for (int i = 0; i <= 3; i++) {
       final y = size.height * i / 3;
 
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        gridPaint,
-      );
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
     // IMPORTANT:
     // Current + Previous share the SAME Y-axis scale.
-    final allValues = [
-      ...values,
-      ...previousValues,
-    ];
+    final allValues = [...values, ...previousValues];
 
     if (allValues.isEmpty) {
       return;
     }
 
-    final maxValue = allValues.reduce(
-      (a, b) => a > b ? a : b,
-    );
+    final maxValue = allValues.reduce((a, b) => a > b ? a : b);
 
     if (maxValue <= 0) {
       return;
     }
 
     // Draw previous first so current stays visually dominant.
-    _drawPreviousLine(
-      canvas,
-      size,
-      maxValue,
-    );
+    _drawPreviousLine(canvas, size, maxValue);
 
-    _drawCurrentLine(
-      canvas,
-      size,
-      maxValue,
-    );
+    _drawCurrentLine(canvas, size, maxValue);
   }
 
-  void _drawCurrentLine(
-    Canvas canvas,
-    Size size,
-    double maxValue,
-  ) {
+  void _drawCurrentLine(Canvas canvas, Size size, double maxValue) {
     if (values.isEmpty) {
       return;
     }
@@ -1774,43 +1601,24 @@ class _TrajectoryPainter extends CustomPainter {
       );
 
       if (i == 0) {
-        path.moveTo(
-          point.dx,
-          point.dy,
-        );
+        path.moveTo(point.dx, point.dy);
       } else {
-        path.lineTo(
-          point.dx,
-          point.dy,
-        );
+        path.lineTo(point.dx, point.dy);
       }
 
-      canvas.drawCircle(
-        point,
-        4,
-        pointPaint,
-      );
+      canvas.drawCircle(point, 4, pointPaint);
     }
 
-    canvas.drawPath(
-      path,
-      linePaint,
-    );
+    canvas.drawPath(path, linePaint);
   }
 
-  void _drawPreviousLine(
-    Canvas canvas,
-    Size size,
-    double maxValue,
-  ) {
+  void _drawPreviousLine(Canvas canvas, Size size, double maxValue) {
     if (previousValues.length < 2) {
       return;
     }
 
     final paint = Paint()
-      ..color = previousLineColor.withValues(
-        alpha: 0.75,
-      )
+      ..color = previousLineColor.withValues(alpha: 0.75)
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
@@ -1844,9 +1652,7 @@ class _TrajectoryPainter extends CustomPainter {
       double travelled = 0;
 
       while (travelled < distance) {
-        final dashEnd =
-            (travelled + dashLength)
-                .clamp(0.0, distance);
+        final dashEnd = (travelled + dashLength).clamp(0.0, distance);
 
         canvas.drawLine(
           start + direction * travelled,
@@ -1867,36 +1673,27 @@ class _TrajectoryPainter extends CustomPainter {
   }) {
     final x = values.length == 1
         ? size.width / 2
-        : size.width *
-            index /
-            (values.length - 1);
+        : size.width * index / (values.length - 1);
 
-    final normalized =
-        values[index] / maxValue;
+    final normalized = values[index] / maxValue;
 
-    final y = size.height -
-        (normalized * size.height * 0.85);
+    final y = size.height - (normalized * size.height * 0.85);
 
     return Offset(x, y);
   }
 
   @override
-  bool shouldRepaint(
-    covariant _TrajectoryPainter oldDelegate,
-  ) {
+  bool shouldRepaint(covariant _TrajectoryPainter oldDelegate) {
     return oldDelegate.values != values ||
         oldDelegate.previousValues != previousValues ||
         oldDelegate.lineColor != lineColor ||
-        oldDelegate.previousLineColor !=
-            previousLineColor ||
+        oldDelegate.previousLineColor != previousLineColor ||
         oldDelegate.gridColor != gridColor;
   }
 }
 
 class _LegendDashPainter extends CustomPainter {
-  const _LegendDashPainter({
-    required this.color,
-  });
+  const _LegendDashPainter({required this.color});
 
   final Color color;
 
@@ -1913,8 +1710,7 @@ class _LegendDashPainter extends CustomPainter {
     double x = 0;
 
     while (x < size.width) {
-      final end =
-          (x + dashLength).clamp(0.0, size.width);
+      final end = (x + dashLength).clamp(0.0, size.width);
 
       canvas.drawLine(
         Offset(x, size.height / 2),
@@ -1927,9 +1723,7 @@ class _LegendDashPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(
-    covariant _LegendDashPainter oldDelegate,
-  ) {
+  bool shouldRepaint(covariant _LegendDashPainter oldDelegate) {
     return oldDelegate.color != color;
   }
 }

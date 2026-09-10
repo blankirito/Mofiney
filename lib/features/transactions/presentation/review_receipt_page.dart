@@ -3,10 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 class ReceiptItem {
-  ReceiptItem({
-    required this.name,
-    required this.price,
-  });
+  ReceiptItem({required this.name, required this.price});
 
   String name;
   double price;
@@ -15,10 +12,7 @@ class ReceiptItem {
 class ReviewReceiptPage extends StatefulWidget {
   final String imagePath;
 
-  const ReviewReceiptPage({
-    super.key,
-    required this.imagePath,
-  });
+  const ReviewReceiptPage({super.key, required this.imagePath});
 
   @override
   State<ReviewReceiptPage> createState() => _ReviewReceiptPageState();
@@ -42,13 +36,9 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
   void initState() {
     super.initState();
 
-    _merchantController = TextEditingController(
-      text: 'Jaya Grocer',
-    );
+    _merchantController = TextEditingController(text: 'Jaya Grocer');
 
-    _dateController = TextEditingController(
-      text: '5 Sep 2026',
-    );
+    _dateController = TextEditingController(text: '5 Sep 2026');
   }
 
   @override
@@ -59,10 +49,7 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
   }
 
   double get _total {
-    return _items.fold(
-      0,
-      (sum, item) => sum + item.price,
-    );
+    return _items.fold(0, (sum, item) => sum + item.price);
   }
 
   void _changeCategory() {
@@ -77,35 +64,23 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
     final currentIndex = categories.indexOf(_category);
 
     setState(() {
-      _category =
-          categories[(currentIndex + 1) % categories.length];
+      _category = categories[(currentIndex + 1) % categories.length];
     });
   }
 
   void _changeAccount() {
-    const accounts = [
-      'Maybank',
-      'CIMB',
-      'Credit Card',
-      'Touch n Go eWallet',
-    ];
+    const accounts = ['Maybank', 'CIMB', 'Credit Card', 'Touch n Go eWallet'];
 
     final currentIndex = accounts.indexOf(_account);
 
     setState(() {
-      _account =
-          accounts[(currentIndex + 1) % accounts.length];
+      _account = accounts[(currentIndex + 1) % accounts.length];
     });
   }
 
   void _addItem() {
     setState(() {
-      _items.add(
-        ReceiptItem(
-          name: 'New Item',
-          price: 0,
-        ),
-      );
+      _items.add(ReceiptItem(name: 'New Item', price: 0));
     });
   }
 
@@ -115,14 +90,10 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
     });
   }
 
-  Future<void> _editItem(
-    int index,
-  ) async {
+  Future<void> _editItem(int index) async {
     final item = _items[index];
 
-    final nameController = TextEditingController(
-      text: item.name,
-    );
+    final nameController = TextEditingController(text: item.name);
 
     final priceController = TextEditingController(
       text: item.price.toStringAsFixed(2),
@@ -138,15 +109,12 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
             children: [
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Item name',
-                ),
+                decoration: const InputDecoration(labelText: 'Item name'),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: priceController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(
+                keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
                 decoration: const InputDecoration(
@@ -178,9 +146,7 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
       return;
     }
 
-    final price = double.tryParse(
-      priceController.text.trim(),
-    );
+    final price = double.tryParse(priceController.text.trim());
 
     if (price == null) {
       return;
@@ -194,32 +160,20 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
 
   void _saveExpense() {
     debugPrint('----- RECEIPT EXPENSE -----');
-    debugPrint(
-      'Merchant: ${_merchantController.text}',
-    );
-    debugPrint(
-      'Date: ${_dateController.text}',
-    );
+    debugPrint('Merchant: ${_merchantController.text}');
+    debugPrint('Date: ${_dateController.text}');
     debugPrint('Category: $_category');
     debugPrint('Account: $_account');
-    debugPrint(
-      'Total: ${_total.toStringAsFixed(2)}',
-    );
+    debugPrint('Total: ${_total.toStringAsFixed(2)}');
 
     for (final item in _items) {
-      debugPrint(
-        '${item.name}: RM ${item.price.toStringAsFixed(2)}',
-      );
+      debugPrint('${item.name}: RM ${item.price.toStringAsFixed(2)}');
     }
 
     debugPrint('---------------------------');
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Receipt expense saved successfully.',
-        ),
-      ),
+      const SnackBar(content: Text('Receipt expense saved successfully.')),
     );
   }
 
@@ -229,9 +183,7 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
 
     return Scaffold(
       backgroundColor: colors.surface,
-      appBar: AppBar(
-        title: const Text('Review Receipt'),
-      ),
+      appBar: AppBar(title: const Text('Review Receipt')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -295,9 +247,7 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
                         controller: _dateController,
                         decoration: const InputDecoration(
                           labelText: 'Date',
-                          prefixIcon: Icon(
-                            Icons.calendar_today_outlined,
-                          ),
+                          prefixIcon: Icon(Icons.calendar_today_outlined),
                         ),
                       ),
                     ],
@@ -315,14 +265,11 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     'Total Amount',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                   Text(
                     'RM ${_total.toStringAsFixed(2)}',
@@ -364,17 +311,12 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
             const SizedBox(height: 24),
 
             Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   'Extracted Line Items',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
 
                 TextButton.icon(
@@ -387,50 +329,37 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
 
             const SizedBox(height: 8),
 
-            ...List.generate(
-              _items.length,
-              (index) {
-                final item = _items[index];
+            ...List.generate(_items.length, (index) {
+              final item = _items[index];
 
-                return Card(
-                  margin: const EdgeInsets.only(
-                    bottom: 8,
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.shopping_bag_outlined),
                   ),
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(
-                        Icons.shopping_bag_outlined,
+                  title: Text(item.name),
+                  subtitle: Text('RM ${item.price.toStringAsFixed(2)}'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          _editItem(index);
+                        },
+                        icon: const Icon(Icons.edit_outlined),
                       ),
-                    ),
-                    title: Text(item.name),
-                    subtitle: Text(
-                      'RM ${item.price.toStringAsFixed(2)}',
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          onPressed: () {
-                            _editItem(index);
-                          },
-                          icon: const Icon(
-                            Icons.edit_outlined,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            _deleteItem(index);
-                          },
-                          icon: const Icon(
-                            Icons.delete_outline,
-                          ),
-                        ),
-                      ],
-                    ),
+                      IconButton(
+                        onPressed: () {
+                          _deleteItem(index);
+                        },
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            }),
 
             const SizedBox(height: 8),
 
@@ -442,16 +371,10 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
                   color: colors.tertiary,
                 ),
                 const SizedBox(width: 6),
-                const Expanded(
-                  child: Text(
-                    'Items match receipt total',
-                  ),
-                ),
+                const Expanded(child: Text('Items match receipt total')),
                 Text(
                   'RM ${_total.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -460,16 +383,13 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
 
             FilledButton.icon(
               onPressed: _saveExpense,
-              icon: const Icon(
-                Icons.check_rounded,
-              ),
+              icon: const Icon(Icons.check_rounded),
               label: Text(
                 'Save Expense '
                 '(RM ${_total.toStringAsFixed(2)})',
               ),
               style: FilledButton.styleFrom(
-                minimumSize:
-                    const Size.fromHeight(52),
+                minimumSize: const Size.fromHeight(52),
               ),
             ),
 
@@ -480,15 +400,10 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
                 Navigator.pop(context);
                 Navigator.pop(context);
               },
-              icon: const Icon(
-                Icons.photo_camera_outlined,
-              ),
-              label: const Text(
-                'Rescan Receipt',
-              ),
+              icon: const Icon(Icons.photo_camera_outlined),
+              label: const Text('Rescan Receipt'),
               style: OutlinedButton.styleFrom(
-                minimumSize:
-                    const Size.fromHeight(48),
+                minimumSize: const Size.fromHeight(48),
               ),
             ),
           ],
@@ -528,19 +443,13 @@ class _ReviewReceiptPageState extends State<ReviewReceiptPage> {
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(
-                  icon,
-                  size: 18,
-                  color: colors.primary,
-                ),
+                Icon(icon, size: 18, color: colors.primary),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     value,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
               ],

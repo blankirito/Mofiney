@@ -7,7 +7,6 @@ import '../../../core/utils/money_formatter.dart';
 
 import '../domain/account.dart';
 
-import '../../transactions/data/mock_transactions.dart';
 import '../../transactions/domain/transaction.dart';
 import '../domain/account_balance_calculator.dart';
 import '../domain/account_monthly_cash_flow.dart';
@@ -15,40 +14,132 @@ import '../domain/account_balance_history.dart';
 import 'edit_account_page.dart';
 import '../../transactions/presentation/transaction_detail_page.dart';
 
-class AccountDetailPage extends StatelessWidget {
+import 'dart:async';
+
+import '../../transactions/data/transaction_repository.dart';
+import '../../../core/app_dependencies.dart';
+import '../../../core/currency/currency_catalog.dart';
+import '../../../core/currency/currency_converter.dart';
+
+class AccountDetailPage extends StatefulWidget {
   const AccountDetailPage({
     super.key,
     required this.account,
+    required this.transactionRepository,
   });
 
   final Account account;
+  final TransactionRepository transactionRepository;
 
- @override
+  @override
+  State<AccountDetailPage> createState() => _AccountDetailPageState();
+}
+
+class _AccountDetailPageState extends State<AccountDetailPage> {
+  List<Transaction> _transactions = [];
+
+  StreamSubscription<List<Transaction>>? _transactionsSubscription;
+  String _baseCurrency = 'MYR';
+  CurrencyConverter _converter = CurrencyConverter('MYR');
+
+  Account get account => widget.account;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _watchTransactions();
+    _loadPresentationCurrency();
+  }
+
+  Future<void> _loadPresentationCurrency() async {
+    final settings = await appSettingsRepository.getSettings();
+    final base = settings?.baseCurrency ?? 'MYR';
+    final converter = CurrencyConverter(base);
+    await converter.warm(const ['MYR']);
+    if (mounted)
+      setState(() {
+        _baseCurrency = base;
+        _converter = converter;
+      });
+  }
+
+  double _display(double value) => _converter.convert(value, 'MYR');
+  String get _symbol => CurrencyCatalog.find(_baseCurrency).symbol;
+
+  void _watchTransactions() {
+    _transactionsSubscription?.cancel();
+
+    _transactionsSubscription = widget.transactionRepository
+        .watchAllTransactions()
+        .listen(
+          (transactions) {
+            if (!mounted) {
+              return;
+            }
+
+            setState(() {
+              _transactions = transactions;
+            });
+          },
+          onError: (Object error) {
+            debugPrint('Failed to watch account detail transactions: $error');
+          },
+        );
+  }
+
+  @override
+  void dispose() {
+    _transactionsSubscription?.cancel();
+
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    final accountTransactions = mockTransactions.where((transaction) {
+    final accountTransactions = _transactions.where((transaction) {
       return transaction.accountId == account.id ||
           transaction.destinationAccountId == account.id;
-    }).toList()
-      ..sort(
-        (a, b) => b.dateTime.compareTo(a.dateTime),
-      );
+    }).toList()..sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
     final currentBalance = AccountBalanceCalculator.calculate(
       account,
-      mockTransactions,
+      _transactions,
     );
+    final displayAccount = account.copyWith(
+      openingBalance: _display(account.openingBalance),
+      creditLimit: account.creditLimit == null
+          ? null
+          : _display(account.creditLimit!),
+      currencyCode: _baseCurrency,
+    );
+    final displayBalance = _display(currentBalance);
 
     final monthlyCashFlow = AccountMonthlyCashFlow.calculate(
       accountId: account.id,
-      transactions: mockTransactions,
-      month: DateTime(2026, 9),
+      transactions: _transactions,
+      month: DateTime.now(),
     );
 
     final balanceHistory = AccountBalanceHistory.calculate(
       account: account,
-      transactions: mockTransactions,
+      transactions: _transactions,
+    );
+    final displayHistory = balanceHistory
+        .map(
+          (point) => AccountBalancePoint(
+            dateTime: point.dateTime,
+            balance: _display(point.balance),
+          ),
+        )
+        .toList();
+    final displayCashFlow = AccountMonthlyCashFlow(
+      income: _display(monthlyCashFlow.income),
+      expenses: _display(monthlyCashFlow.expenses),
+      incomeCount: monthlyCashFlow.incomeCount,
+      expenseCount: monthlyCashFlow.expenseCount,
     );
 
     return Scaffold(
@@ -72,8 +163,8 @@ class AccountDetailPage extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
 
               _AccountHeroCard(
-                account: account,
-                currentBalance: currentBalance,
+                account: displayAccount,
+                currentBalance: displayBalance,
                 latestTransaction: accountTransactions.isEmpty
                     ? null
                     : accountTransactions.first,
@@ -82,20 +173,23 @@ class AccountDetailPage extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
 
               _BalanceTrendCard(
-                history: balanceHistory,
+                history: displayHistory,
+                currencySymbol: _symbol,
               ),
 
               const SizedBox(height: AppSpacing.md),
 
               _MonthlyCashFlowCard(
-                cashFlow: monthlyCashFlow,
+                cashFlow: displayCashFlow,
+                month: DateTime.now(),
+                currencySymbol: _symbol,
               ),
 
               const SizedBox(height: AppSpacing.md),
 
               _AccountInformationCard(
-                account: account,
-                currentBalance: currentBalance,
+                account: displayAccount,
+                currentBalance: displayBalance,
               ),
 
               const SizedBox(height: AppSpacing.md),
@@ -103,6 +197,9 @@ class AccountDetailPage extends StatelessWidget {
               _RecentActivityCard(
                 account: account,
                 transactions: accountTransactions,
+                repository: widget.transactionRepository,
+                currencySymbol: _symbol,
+                displayAmount: (transaction) => _display(transaction.amount),
               ),
             ],
           ),
@@ -120,9 +217,7 @@ class AccountDetailPage extends StatelessWidget {
           onPressed: () {
             Navigator.pop(context);
           },
-          icon: const Icon(
-            Icons.arrow_back_rounded,
-          ),
+          icon: const Icon(Icons.arrow_back_rounded),
         ),
 
         const SizedBox(width: AppSpacing.xs),
@@ -216,19 +311,20 @@ class AccountDetailPage extends StatelessWidget {
         ),
 
         TextButton.icon(
-          onPressed: () {
-            Navigator.of(context).push(
+          onPressed: () async {
+            final updatedAccount = await Navigator.of(context).push<Account>(
               MaterialPageRoute(
-                builder: (_) => EditAccountPage(
-                  account: account,
-                ),
+                builder: (_) => EditAccountPage(account: account),
               ),
             );
+
+            if (updatedAccount == null || !context.mounted) {
+              return;
+            }
+
+            Navigator.of(context).pop(updatedAccount);
           },
-          icon: const Icon(
-            Icons.edit_outlined,
-            size: 18,
-          ),
+          icon: const Icon(Icons.edit_outlined, size: 18),
           label: const Text('Edit'),
         ),
       ],
@@ -255,9 +351,32 @@ class AccountDetailPage extends StatelessWidget {
 class _MonthlyCashFlowCard extends StatelessWidget {
   const _MonthlyCashFlowCard({
     required this.cashFlow,
+    required this.month,
+    required this.currencySymbol,
   });
 
   final AccountMonthlyCashFlow cashFlow;
+  final DateTime month;
+  final String currencySymbol;
+
+  String _monthLabel(DateTime date) {
+    const months = [
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
+    ];
+
+    return '${months[date.month - 1]} ${date.year}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -273,9 +392,7 @@ class _MonthlyCashFlowCard extends StatelessWidget {
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.45,
-          ),
+          color: colors.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
       child: Column(
@@ -292,7 +409,7 @@ class _MonthlyCashFlowCard extends StatelessWidget {
                 ),
               ),
               Text(
-                'SEP 2026',
+                _monthLabel(month),
                 style: AppTextStyles.labelCaps.copyWith(
                   color: colors.onSurfaceVariant,
                   fontSize: 9,
@@ -311,6 +428,7 @@ class _MonthlyCashFlowCard extends StatelessWidget {
                   amount: cashFlow.income,
                   icon: Icons.south_west_rounded,
                   color: colors.tertiary,
+                  currencySymbol: currencySymbol,
                 ),
               ),
 
@@ -322,6 +440,7 @@ class _MonthlyCashFlowCard extends StatelessWidget {
                   amount: cashFlow.expenses,
                   icon: Icons.north_east_rounded,
                   color: colors.error,
+                  currencySymbol: currencySymbol,
                 ),
               ),
             ],
@@ -334,9 +453,7 @@ class _MonthlyCashFlowCard extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.sm),
             decoration: BoxDecoration(
               color: colors.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(
-                AppRadius.md,
-              ),
+              borderRadius: BorderRadius.circular(AppRadius.md),
             ),
             child: Row(
               children: [
@@ -350,14 +467,9 @@ class _MonthlyCashFlowCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${isPositive ? '+' : '-'}${MoneyFormatter.format(
-                    amount: netFlow.abs(),
-                    symbol: 'RM',
-                  )}',
+                  '${isPositive ? '+' : '-'}${MoneyFormatter.format(amount: netFlow.abs(), symbol: currencySymbol)}',
                   style: AppTextStyles.amountMedium.copyWith(
-                    color: isPositive
-                        ? colors.tertiary
-                        : colors.error,
+                    color: isPositive ? colors.tertiary : colors.error,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -376,12 +488,14 @@ class _CashFlowMetric extends StatelessWidget {
     required this.amount,
     required this.icon,
     required this.color,
+    required this.currencySymbol,
   });
 
   final String label;
   final double amount;
   final IconData icon;
   final Color color;
+  final String currencySymbol;
 
   @override
   Widget build(BuildContext context) {
@@ -398,11 +512,7 @@ class _CashFlowMetric extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                size: 16,
-                color: color,
-              ),
+              Icon(icon, size: 16, color: color),
               const SizedBox(width: 5),
               Text(
                 label,
@@ -417,10 +527,7 @@ class _CashFlowMetric extends StatelessWidget {
           const SizedBox(height: 8),
 
           Text(
-            MoneyFormatter.format(
-              amount: amount,
-              symbol: 'RM',
-            ),
+            MoneyFormatter.format(amount: amount, symbol: currencySymbol),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.amountMedium.copyWith(
@@ -464,8 +571,8 @@ class _AccountHeroCard extends StatelessWidget {
     final hour = dateTime.hour == 0
         ? 12
         : dateTime.hour > 12
-            ? dateTime.hour - 12
-            : dateTime.hour;
+        ? dateTime.hour - 12
+        : dateTime.hour;
 
     final minute = dateTime.minute.toString().padLeft(2, '0');
 
@@ -560,7 +667,7 @@ class _AccountHeroCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(AppRadius.full),
                   ),
                   child: Text(
-                    'MYR • PRIMARY',
+                    '${account.currencyCode} • PRIMARY',
                     style: AppTextStyles.labelCaps.copyWith(
                       color: colors.onSurfaceVariant,
                       fontSize: 9,
@@ -586,7 +693,7 @@ class _AccountHeroCard extends StatelessWidget {
           Text(
             MoneyFormatter.format(
               amount: currentBalance,
-              symbol: 'RM',
+              symbol: account.currencyCode,
             ),
             style: AppTextStyles.amountLarge.copyWith(
               color: colors.onSurface,
@@ -608,11 +715,7 @@ class _AccountHeroCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.verified_outlined,
-                  size: 17,
-                  color: colors.tertiary,
-                ),
+                Icon(Icons.verified_outlined, size: 17, color: colors.tertiary),
 
                 const SizedBox(width: 6),
 
@@ -627,15 +730,13 @@ class _AccountHeroCard extends StatelessWidget {
 
                 Text(
                   latestTransaction == null
-                    ? 'No activity yet'
-                    : _formatLastEntry(
-                        latestTransaction!.dateTime,
-                      ),
-                style: AppTextStyles.amountSmall.copyWith(
-                  color: colors.onSurface,
-                  fontWeight: FontWeight.w600,
+                      ? 'No activity yet'
+                      : _formatLastEntry(latestTransaction!.dateTime),
+                  style: AppTextStyles.amountSmall.copyWith(
+                    color: colors.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
               ],
             ),
           ),
@@ -674,8 +775,7 @@ class _AccountInformationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    final isCreditCard =
-        account.type == AccountType.creditCard;
+    final isCreditCard = account.type == AccountType.creditCard;
 
     return Container(
       width: double.infinity,
@@ -684,18 +784,14 @@ class _AccountInformationCard extends StatelessWidget {
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.45,
-          ),
+          color: colors.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            isCreditCard
-                ? 'CREDIT OVERVIEW'
-                : 'ACCOUNT INFORMATION',
+            isCreditCard ? 'CREDIT OVERVIEW' : 'ACCOUNT INFORMATION',
             style: AppTextStyles.labelCaps.copyWith(
               color: colors.onSurfaceVariant,
             ),
@@ -712,16 +808,14 @@ class _AccountInformationCard extends StatelessWidget {
     );
   }
 
-  Widget _buildStandardAccountInformation(
-    BuildContext context,
-  ) {
+  Widget _buildStandardAccountInformation(BuildContext context) {
     return Column(
       children: [
         _InformationRow(
           label: 'Opening Balance',
           value: MoneyFormatter.format(
             amount: account.openingBalance,
-            symbol: 'RM',
+            symbol: account.currencyCode,
           ),
         ),
 
@@ -734,10 +828,7 @@ class _AccountInformationCard extends StatelessWidget {
 
         const _InformationDivider(),
 
-        const _InformationRow(
-          label: 'Currency',
-          value: 'MYR',
-        ),
+        _InformationRow(label: 'Currency', value: account.currencyCode),
 
         const _InformationDivider(),
 
@@ -749,19 +840,17 @@ class _AccountInformationCard extends StatelessWidget {
     );
   }
 
-  Widget _buildCreditCardInformation(
-    BuildContext context,
-  ) {
+  Widget _buildCreditCardInformation(BuildContext context) {
     final creditLimit = account.creditLimit ?? 0;
 
-    final availableCredit =
-      (creditLimit - currentBalance)
-          .clamp(0.0, double.infinity);
+    final availableCredit = (creditLimit - currentBalance).clamp(
+      0.0,
+      double.infinity,
+    );
 
     final utilization = creditLimit <= 0
-      ? 0.0
-      : (currentBalance / creditLimit)
-          .clamp(0.0, 1.0);
+        ? 0.0
+        : (currentBalance / creditLimit).clamp(0.0, 1.0);
 
     return Column(
       children: [
@@ -769,7 +858,7 @@ class _AccountInformationCard extends StatelessWidget {
           label: 'Outstanding',
           value: MoneyFormatter.format(
             amount: currentBalance,
-            symbol: 'RM',
+            symbol: account.currencyCode,
           ),
         ),
 
@@ -779,7 +868,7 @@ class _AccountInformationCard extends StatelessWidget {
           label: 'Credit Limit',
           value: MoneyFormatter.format(
             amount: creditLimit,
-            symbol: 'RM',
+            symbol: account.currencyCode,
           ),
         ),
 
@@ -789,7 +878,7 @@ class _AccountInformationCard extends StatelessWidget {
           label: 'Available Credit',
           value: MoneyFormatter.format(
             amount: availableCredit,
-            symbol: 'RM',
+            symbol: account.currencyCode,
           ),
         ),
 
@@ -797,8 +886,7 @@ class _AccountInformationCard extends StatelessWidget {
 
         _InformationRow(
           label: 'Utilization',
-          value:
-              '${(utilization * 100).toStringAsFixed(1)}%',
+          value: '${(utilization * 100).toStringAsFixed(1)}%',
         ),
 
         if (account.statementCycleDay != null) ...[
@@ -831,10 +919,7 @@ class _AccountInformationCard extends StatelessWidget {
 }
 
 class _InformationRow extends StatelessWidget {
-  const _InformationRow({
-    required this.label,
-    required this.value,
-  });
+  const _InformationRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -844,9 +929,7 @@ class _InformationRow extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: 4,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Expanded(
@@ -882,44 +965,38 @@ class _InformationDivider extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: AppSpacing.xs,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Divider(
         height: 1,
-        color: colors.outlineVariant.withValues(
-          alpha: 0.45,
-        ),
+        color: colors.outlineVariant.withValues(alpha: 0.45),
       ),
     );
   }
 }
 
-enum _TransactionFilter {
-  all,
-  expenses,
-  income,
-  transfers,
-}
+enum _TransactionFilter { all, expenses, income, transfers }
 
 class _RecentActivityCard extends StatefulWidget {
   const _RecentActivityCard({
     required this.account,
     required this.transactions,
+    required this.repository,
+    required this.currencySymbol,
+    required this.displayAmount,
   });
 
   final Account account;
   final List<Transaction> transactions;
+  final TransactionRepository repository;
+  final String currencySymbol;
+  final double Function(Transaction) displayAmount;
 
   @override
-  State<_RecentActivityCard> createState() =>
-      _RecentActivityCardState();
+  State<_RecentActivityCard> createState() => _RecentActivityCardState();
 }
 
-class _RecentActivityCardState
-    extends State<_RecentActivityCard> {
-  _TransactionFilter _selectedFilter =
-      _TransactionFilter.all;
+class _RecentActivityCardState extends State<_RecentActivityCard> {
+  _TransactionFilter _selectedFilter = _TransactionFilter.all;
 
   String _emptyMessage() {
     switch (_selectedFilter) {
@@ -941,29 +1018,22 @@ class _RecentActivityCardState
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    final sortedTransactions =
-      List<Transaction>.from(widget.transactions)
-        ..sort(
-          (a, b) => b.dateTime.compareTo(a.dateTime),
-        );
+    final sortedTransactions = List<Transaction>.from(widget.transactions)
+      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
-    final filteredTransactions =
-        sortedTransactions.where((transaction) {
+    final filteredTransactions = sortedTransactions.where((transaction) {
       switch (_selectedFilter) {
         case _TransactionFilter.all:
           return true;
 
         case _TransactionFilter.expenses:
-          return transaction.type ==
-              TransactionType.expense;
+          return transaction.type == TransactionType.expense;
 
         case _TransactionFilter.income:
-          return transaction.type ==
-              TransactionType.income;
+          return transaction.type == TransactionType.income;
 
         case _TransactionFilter.transfers:
-          return transaction.type ==
-              TransactionType.transfer;
+          return transaction.type == TransactionType.transfer;
       }
     }).toList();
 
@@ -974,9 +1044,7 @@ class _RecentActivityCardState
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.45,
-          ),
+          color: colors.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
       child: Column(
@@ -1027,9 +1095,7 @@ class _RecentActivityCardState
               TextButton(
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Export coming next'),
-                    ),
+                    const SnackBar(content: Text('Export coming next')),
                   );
                 },
                 child: const Text('Export'),
@@ -1045,8 +1111,7 @@ class _RecentActivityCardState
               children: [
                 _TransactionFilterChip(
                   label: 'All',
-                  selected:
-                      _selectedFilter == _TransactionFilter.all,
+                  selected: _selectedFilter == _TransactionFilter.all,
                   onTap: () {
                     setState(() {
                       _selectedFilter = _TransactionFilter.all;
@@ -1058,12 +1123,10 @@ class _RecentActivityCardState
 
                 _TransactionFilterChip(
                   label: 'Expenses',
-                  selected:
-                      _selectedFilter == _TransactionFilter.expenses,
+                  selected: _selectedFilter == _TransactionFilter.expenses,
                   onTap: () {
                     setState(() {
-                      _selectedFilter =
-                          _TransactionFilter.expenses;
+                      _selectedFilter = _TransactionFilter.expenses;
                     });
                   },
                 ),
@@ -1072,8 +1135,7 @@ class _RecentActivityCardState
 
                 _TransactionFilterChip(
                   label: 'Income',
-                  selected:
-                      _selectedFilter == _TransactionFilter.income,
+                  selected: _selectedFilter == _TransactionFilter.income,
                   onTap: () {
                     setState(() {
                       _selectedFilter = _TransactionFilter.income;
@@ -1085,12 +1147,10 @@ class _RecentActivityCardState
 
                 _TransactionFilterChip(
                   label: 'Transfers',
-                  selected:
-                      _selectedFilter == _TransactionFilter.transfers,
+                  selected: _selectedFilter == _TransactionFilter.transfers,
                   onTap: () {
                     setState(() {
-                      _selectedFilter =
-                          _TransactionFilter.transfers;
+                      _selectedFilter = _TransactionFilter.transfers;
                     });
                   },
                 ),
@@ -1102,9 +1162,7 @@ class _RecentActivityCardState
 
           if (filteredTransactions.isEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: AppSpacing.sm,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
               child: Text(
                 _emptyMessage(),
                 style: AppTextStyles.bodySmall.copyWith(
@@ -1117,65 +1175,64 @@ class _RecentActivityCardState
               (transaction) => _RecentActivityRow(
                 account: widget.account,
                 transaction: transaction,
+                repository: widget.repository,
+                currencySymbol: widget.currencySymbol,
+                displayAmount: widget.displayAmount,
               ),
             ),
-            const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.sm),
 
-            Divider(
-              height: 1,
-              color: colors.outlineVariant.withValues(
-                alpha: 0.45,
-              ),
+          Divider(
+            height: 1,
+            color: colors.outlineVariant.withValues(alpha: 0.45),
+          ),
+
+          const SizedBox(height: AppSpacing.sm),
+
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-
-            const SizedBox(height: AppSpacing.sm),
-
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: colors.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(
-                  AppRadius.md,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 18,
+                  color: colors.onSurfaceVariant,
                 ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.info_outline_rounded,
-                    size: 18,
-                    color: colors.onSurfaceVariant,
-                  ),
 
-                  const SizedBox(width: AppSpacing.xs),
+                const SizedBox(width: AppSpacing.xs),
 
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Manual account',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: colors.onSurface,
-                            fontWeight: FontWeight.w700,
-                          ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Manual account',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: colors.onSurface,
+                          fontWeight: FontWeight.w700,
                         ),
+                      ),
 
-                        const SizedBox(height: 3),
+                      const SizedBox(height: 3),
 
-                        Text(
-                          'Balance is calculated from your opening balance and recorded transactions.',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: colors.onSurfaceVariant,
-                          ),
+                      Text(
+                        'Balance is calculated from your opening balance and recorded transactions.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: colors.onSurfaceVariant,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
         ],
       ),
     );
@@ -1198,31 +1255,20 @@ class _TransactionFilterChip extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
 
     return Material(
-      color: selected
-          ? colors.primaryContainer
-          : colors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(
-        AppRadius.full,
-      ),
+      color: selected ? colors.primaryContainer : colors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(AppRadius.full),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(
-          AppRadius.full,
-        ),
+        borderRadius: BorderRadius.circular(AppRadius.full),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 8,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           child: Text(
             label,
             style: AppTextStyles.bodySmall.copyWith(
               color: selected
                   ? colors.onPrimaryContainer
                   : colors.onSurfaceVariant,
-              fontWeight: selected
-                  ? FontWeight.w700
-                  : FontWeight.w500,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             ),
           ),
         ),
@@ -1235,15 +1281,20 @@ class _RecentActivityRow extends StatelessWidget {
   const _RecentActivityRow({
     required this.account,
     required this.transaction,
+    required this.repository,
+    required this.currencySymbol,
+    required this.displayAmount,
   });
 
   final Account account;
   final Transaction transaction;
+  final TransactionRepository repository;
+  final String currencySymbol;
+  final double Function(Transaction) displayAmount;
 
   String? _secondaryInfo() {
     if (transaction.type == TransactionType.transfer) {
-      final isIncoming =
-          transaction.destinationAccountId == account.id;
+      final isIncoming = transaction.destinationAccountId == account.id;
 
       if (isIncoming) {
         return 'From ${transaction.account}';
@@ -1264,8 +1315,7 @@ class _RecentActivityRow extends StatelessWidget {
       return transaction.title;
     }
 
-    final isIncoming =
-        transaction.destinationAccountId == account.id;
+    final isIncoming = transaction.destinationAccountId == account.id;
 
     if (isIncoming) {
       return 'Transfer from ${transaction.account}';
@@ -1293,8 +1343,8 @@ class _RecentActivityRow extends StatelessWidget {
     final hour = dateTime.hour == 0
         ? 12
         : dateTime.hour > 12
-            ? dateTime.hour - 12
-            : dateTime.hour;
+        ? dateTime.hour - 12
+        : dateTime.hour;
 
     final minute = dateTime.minute.toString().padLeft(2, '0');
     final period = dateTime.hour >= 12 ? 'PM' : 'AM';
@@ -1318,11 +1368,9 @@ class _RecentActivityRow extends StatelessWidget {
         transaction.type == TransactionType.transfer &&
         transaction.destinationAccountId == account.id;
 
-    final isIncome =
-        transaction.type == TransactionType.income;
+    final isIncome = transaction.type == TransactionType.income;
 
-    final isPositive =
-        isIncomingTransfer || isIncome;
+    final isPositive = isIncomingTransfer || isIncome;
 
     final sign = isPositive ? '+' : '-';
 
@@ -1333,6 +1381,7 @@ class _RecentActivityRow extends StatelessWidget {
           MaterialPageRoute(
             builder: (_) => TransactionDetailPage(
               transaction: transaction,
+              repository: repository,
             ),
           ),
         );
@@ -1343,92 +1392,83 @@ class _RecentActivityRow extends StatelessWidget {
           horizontal: AppSpacing.xs,
           vertical: 10,
         ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(
-                AppRadius.md,
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Icon(
+                _transactionIcon(transaction.type),
+                size: 20,
+                color: isPositive ? colors.tertiary : colors.onSurfaceVariant,
               ),
             ),
-            child: Icon(
-              _transactionIcon(transaction.type),
-              size: 20,
-              color: isPositive
-                  ? colors.tertiary
-                  : colors.onSurfaceVariant,
+
+            const SizedBox(width: AppSpacing.sm),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _displayTitle(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: colors.onSurface,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+
+                  const SizedBox(height: 2),
+
+                  Text(
+                    _displaySubtitle(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          const SizedBox(width: AppSpacing.sm),
+            const SizedBox(width: AppSpacing.sm),
 
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  _displayTitle(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: colors.onSurface,
-                    fontWeight: FontWeight.w600,
+                  '$sign${MoneyFormatter.format(amount: displayAmount(transaction).abs(), symbol: currencySymbol)}',
+                  style: AppTextStyles.amountSmall.copyWith(
+                    color: isPositive ? colors.tertiary : colors.onSurface,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
 
-                const SizedBox(height: 2),
+                if (secondaryInfo != null) ...[
+                  const SizedBox(height: 3),
 
-                Text(
-                  _displaySubtitle(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: colors.onSurfaceVariant,
+                  Text(
+                    secondaryInfo,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: colors.onSurfaceVariant,
+                      fontSize: 10,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
-          ),
-
-          const SizedBox(width: AppSpacing.sm),
-
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '$sign${MoneyFormatter.format(
-                  amount: transaction.amount.abs(),
-                  symbol: 'RM',
-                )}',
-                style: AppTextStyles.amountSmall.copyWith(
-                  color: isPositive
-                      ? colors.tertiary
-                      : colors.onSurface,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-
-              if (secondaryInfo != null) ...[
-                const SizedBox(height: 3),
-
-                Text(
-                  secondaryInfo,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: colors.onSurfaceVariant,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
-    )
     );
   }
 
@@ -1463,15 +1503,11 @@ class _BalanceTrendPainter extends CustomPainter {
       return;
     }
 
-    final values = history
-        .map((point) => point.balance)
-        .toList();
+    final values = history.map((point) => point.balance).toList();
 
-    final minValue =
-        values.reduce((a, b) => a < b ? a : b);
+    final minValue = values.reduce((a, b) => a < b ? a : b);
 
-    final maxValue =
-        values.reduce((a, b) => a > b ? a : b);
+    final maxValue = values.reduce((a, b) => a > b ? a : b);
 
     final range = maxValue - minValue;
 
@@ -1482,11 +1518,7 @@ class _BalanceTrendPainter extends CustomPainter {
     for (int i = 1; i <= 3; i++) {
       final y = size.height * i / 4;
 
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        gridPaint,
-      );
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
     final linePaint = Paint()
@@ -1507,8 +1539,7 @@ class _BalanceTrendPainter extends CustomPainter {
           ? 0.5
           : (history[i].balance - minValue) / range;
 
-      final y =
-          size.height - (normalized * size.height);
+      final y = size.height - (normalized * size.height);
 
       if (i == 0) {
         path.moveTo(x, y);
@@ -1517,10 +1548,7 @@ class _BalanceTrendPainter extends CustomPainter {
       }
     }
 
-    canvas.drawPath(
-      path,
-      linePaint,
-    );
+    canvas.drawPath(path, linePaint);
 
     final pointPaint = Paint()
       ..color = lineColor
@@ -1540,31 +1568,20 @@ class _BalanceTrendPainter extends CustomPainter {
           ? 0.5
           : (history[i].balance - minValue) / range;
 
-      final y =
-          size.height - (normalized * size.height);
+      final y = size.height - (normalized * size.height);
 
       final point = Offset(x, y);
 
-      canvas.drawCircle(
-        point,
-        i == history.length - 1 ? 5 : 3.5,
-        pointPaint,
-      );
+      canvas.drawCircle(point, i == history.length - 1 ? 5 : 3.5, pointPaint);
 
       if (i == history.length - 1) {
-        canvas.drawCircle(
-          point,
-          5,
-          pointBorderPaint,
-        );
+        canvas.drawCircle(point, 5, pointBorderPaint);
       }
     }
   }
 
   @override
-  bool shouldRepaint(
-    covariant _BalanceTrendPainter oldDelegate,
-  ) {
+  bool shouldRepaint(covariant _BalanceTrendPainter oldDelegate) {
     return oldDelegate.history != history ||
         oldDelegate.lineColor != lineColor ||
         oldDelegate.gridColor != gridColor;
@@ -1574,10 +1591,12 @@ class _BalanceTrendPainter extends CustomPainter {
 class _BalanceTrendCard extends StatelessWidget {
   const _BalanceTrendCard({
     required this.history,
+    required this.currencySymbol,
   });
 
   final List<AccountBalancePoint> history;
-  
+  final String currencySymbol;
+
   String _formatChartDate(DateTime date) {
     const months = [
       'Jan',
@@ -1601,11 +1620,9 @@ class _BalanceTrendCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    final startBalance =
-        history.isEmpty ? 0.0 : history.first.balance;
+    final startBalance = history.isEmpty ? 0.0 : history.first.balance;
 
-    final endBalance =
-        history.isEmpty ? 0.0 : history.last.balance;
+    final endBalance = history.isEmpty ? 0.0 : history.last.balance;
 
     final change = endBalance - startBalance;
 
@@ -1618,9 +1635,7 @@ class _BalanceTrendCard extends StatelessWidget {
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.45,
-          ),
+          color: colors.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
       child: Column(
@@ -1637,14 +1652,9 @@ class _BalanceTrendCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${isPositive ? '+' : '-'}${MoneyFormatter.format(
-                  amount: change.abs(),
-                  symbol: 'RM',
-                )}',
+                '${isPositive ? '+' : '-'}${MoneyFormatter.format(amount: change.abs(), symbol: currencySymbol)}',
                 style: AppTextStyles.amountSmall.copyWith(
-                  color: isPositive
-                      ? colors.tertiary
-                      : colors.error,
+                  color: isPositive ? colors.tertiary : colors.error,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1679,9 +1689,7 @@ class _BalanceTrendCard extends StatelessWidget {
                 ),
                 if (history.length > 2)
                   Text(
-                    _formatChartDate(
-                      history[history.length ~/ 2].dateTime,
-                    ),
+                    _formatChartDate(history[history.length ~/ 2].dateTime),
                     style: AppTextStyles.bodySmall.copyWith(
                       color: colors.onSurfaceVariant,
                       fontSize: 10,
@@ -1696,70 +1704,70 @@ class _BalanceTrendCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.md),
 
-            Divider(
-              height: 1,
-              color: colors.outlineVariant.withValues(alpha: 0.45),
-            ),
+          Divider(
+            height: 1,
+            color: colors.outlineVariant.withValues(alpha: 0.45),
+          ),
 
-            const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.sm),
 
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'START',
-                        style: AppTextStyles.labelCaps.copyWith(
-                          color: colors.onSurfaceVariant,
-                          fontSize: 9,
-                        ),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'START',
+                      style: AppTextStyles.labelCaps.copyWith(
+                        color: colors.onSurfaceVariant,
+                        fontSize: 9,
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        MoneyFormatter.format(
-                          amount: startBalance,
-                          symbol: 'RM',
-                        ),
-                        style: AppTextStyles.amountSmall.copyWith(
-                          color: colors.onSurface,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      MoneyFormatter.format(
+                        amount: startBalance,
+                        symbol: currencySymbol,
                       ),
-                    ],
-                  ),
+                      style: AppTextStyles.amountSmall.copyWith(
+                        color: colors.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
 
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        'CURRENT',
-                        style: AppTextStyles.labelCaps.copyWith(
-                          color: colors.onSurfaceVariant,
-                          fontSize: 9,
-                        ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'CURRENT',
+                      style: AppTextStyles.labelCaps.copyWith(
+                        color: colors.onSurfaceVariant,
+                        fontSize: 9,
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        MoneyFormatter.format(
-                          amount: endBalance,
-                          symbol: 'RM',
-                        ),
-                        style: AppTextStyles.amountSmall.copyWith(
-                          color: colors.onSurface,
-                          fontWeight: FontWeight.w700,
-                        ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      MoneyFormatter.format(
+                        amount: endBalance,
+                        symbol: currencySymbol,
                       ),
-                    ],
-                  ),
+                      style: AppTextStyles.amountSmall.copyWith(
+                        color: colors.onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
         ],
       ),
     );

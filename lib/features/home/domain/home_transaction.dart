@@ -1,8 +1,4 @@
-enum HomeTransactionType {
-  expense,
-  income,
-  transfer,
-}
+enum HomeTransactionType { expense, income, transfer }
 
 class HomeTransaction {
   const HomeTransaction({

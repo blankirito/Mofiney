@@ -10,10 +10,7 @@ import '../domain/onboarding_data.dart';
 import '../../../core/navigation/main_shell.dart';
 
 class SetupCompletePage extends StatelessWidget {
-  const SetupCompletePage({
-    super.key,
-    required this.data,
-  });
+  const SetupCompletePage({super.key, required this.data});
 
   final OnboardingData data;
 
@@ -21,8 +18,9 @@ class SetupCompletePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    final dailyTarget =
-        data.monthlyBudget != null ? data.monthlyBudget! / 30 : null;
+    final dailyTarget = data.monthlyBudget != null
+        ? data.monthlyBudget! / 30
+        : null;
 
     return Scaffold(
       body: SafeArea(
@@ -87,8 +85,7 @@ class SetupCompletePage extends StatelessWidget {
                     Text(
                       "You're ready to start tracking",
                       textAlign: TextAlign.center,
-                      style:
-                          AppTextStyles.headlineLargeMobile.copyWith(
+                      style: AppTextStyles.headlineLargeMobile.copyWith(
                         color: colors.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
@@ -107,29 +104,21 @@ class SetupCompletePage extends StatelessWidget {
 
                     const SizedBox(height: AppSpacing.lg),
 
-                    _SummaryCard(
-                      data: data,
-                      dailyTarget: dailyTarget,
-                    ),
+                    _SummaryCard(data: data, dailyTarget: dailyTarget),
 
                     const SizedBox(height: AppSpacing.md),
 
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: colors.primaryContainer.withValues(
-                          alpha: 0.35,
-                        ),
-                        borderRadius:
-                            BorderRadius.circular(AppRadius.md),
+                        color: colors.primaryContainer.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                         border: Border.all(
-                          color:
-                              colors.primary.withValues(alpha: 0.12),
+                          color: colors.primary.withValues(alpha: 0.12),
                         ),
                       ),
                       child: Row(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(
                             Icons.info_outline_rounded,
@@ -143,8 +132,7 @@ class SetupCompletePage extends StatelessWidget {
                                 children: [
                                   TextSpan(
                                     text: "What's next: ",
-                                    style: AppTextStyles.bodySmall
-                                        .copyWith(
+                                    style: AppTextStyles.bodySmall.copyWith(
                                       color: colors.onSurface,
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -154,10 +142,8 @@ class SetupCompletePage extends StatelessWidget {
                                         'Record daily expenses manually, '
                                         'scan receipts with OCR, or log '
                                         'income anytime from the Home dashboard.',
-                                    style: AppTextStyles.bodySmall
-                                        .copyWith(
-                                      color:
-                                          colors.onSurfaceVariant,
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: colors.onSurfaceVariant,
                                     ),
                                   ),
                                 ],
@@ -175,9 +161,7 @@ class SetupCompletePage extends StatelessWidget {
             _BottomAction(
               onPressed: () {
                 Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (_) => const MainShell(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const MainShell()),
                   (route) => false,
                 );
               },
@@ -190,10 +174,7 @@ class SetupCompletePage extends StatelessWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
-    required this.data,
-    required this.dailyTarget,
-  });
+  const _SummaryCard({required this.data, required this.dailyTarget});
 
   final OnboardingData data;
   final double? dailyTarget;
@@ -207,9 +188,7 @@ class _SummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(
-          color: colors.outlineVariant,
-        ),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
         children: [
@@ -219,14 +198,10 @@ class _SummaryCard extends StatelessWidget {
             title: 'PRIMARY CURRENCY',
             value: '${data.currencyName} (${data.currencyCode})',
             trailing: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: colors.primaryContainer,
-                borderRadius:
-                    BorderRadius.circular(AppRadius.full),
+                borderRadius: BorderRadius.circular(AppRadius.full),
               ),
               child: Text(
                 'Active',
@@ -238,10 +213,7 @@ class _SummaryCard extends StatelessWidget {
             ),
           ),
 
-          Divider(
-            height: AppSpacing.xl,
-            color: colors.outlineVariant,
-          ),
+          Divider(height: AppSpacing.xl, color: colors.outlineVariant),
 
           _SummaryRow(
             icon: Icons.bar_chart_rounded,
@@ -254,10 +226,7 @@ class _SummaryCard extends StatelessWidget {
                 : '${data.currencySymbol} ${dailyTarget!.toStringAsFixed(2)} daily pace',
           ),
 
-          Divider(
-            height: AppSpacing.xl,
-            color: colors.outlineVariant,
-          ),
+          Divider(height: AppSpacing.xl, color: colors.outlineVariant),
 
           _SummaryRow(
             icon: Icons.account_balance_outlined,
@@ -314,11 +283,7 @@ class _SummaryRow extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 )
-              : Icon(
-                  icon,
-                  color: colors.onPrimaryContainer,
-                  size: 20,
-                ),
+              : Icon(icon, color: colors.onPrimaryContainer, size: 20),
         ),
 
         const SizedBox(width: AppSpacing.sm),
@@ -363,9 +328,7 @@ class _SummaryRow extends StatelessWidget {
 }
 
 class _BottomAction extends StatelessWidget {
-  const _BottomAction({
-    required this.onPressed,
-  });
+  const _BottomAction({required this.onPressed});
 
   final VoidCallback onPressed;
 
@@ -393,10 +356,7 @@ class _BottomAction extends StatelessWidget {
                 children: [
                   Text('Go to Dashboard'),
                   SizedBox(width: AppSpacing.xs),
-                  Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 18,
-                  ),
+                  Icon(Icons.arrow_forward_rounded, size: 18),
                 ],
               ),
             ),

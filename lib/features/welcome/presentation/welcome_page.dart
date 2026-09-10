@@ -136,8 +136,9 @@ class WelcomePage extends StatelessWidget {
                             ),
                             decoration: BoxDecoration(
                               color: colors.primaryContainer,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.full),
+                              borderRadius: BorderRadius.circular(
+                                AppRadius.full,
+                              ),
                             ),
                             child: Text(
                               'Fresh Start',
@@ -188,9 +189,7 @@ class WelcomePage extends StatelessWidget {
                               ? colors.surfaceContainerLow
                               : colors.surfaceContainerLow,
                           borderRadius: BorderRadius.circular(AppRadius.md),
-                          border: Border.all(
-                            color: colors.outlineVariant,
-                          ),
+                          border: Border.all(color: colors.outlineVariant),
                         ),
                         child: Row(
                           children: [
@@ -199,8 +198,9 @@ class WelcomePage extends StatelessWidget {
                               height: 32,
                               decoration: BoxDecoration(
                                 color: colors.primaryContainer,
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.defaultRadius),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.defaultRadius,
+                                ),
                               ),
                               child: Icon(
                                 Icons.account_balance_wallet_outlined,
@@ -249,9 +249,7 @@ class WelcomePage extends StatelessWidget {
               Text(
                 'FINANCIAL CLARITY',
                 textAlign: TextAlign.center,
-                style: AppTextStyles.labelCaps.copyWith(
-                  color: colors.primary,
-                ),
+                style: AppTextStyles.labelCaps.copyWith(color: colors.primary),
               ),
 
               const SizedBox(height: AppSpacing.xs),
@@ -306,9 +304,7 @@ class WelcomePage extends StatelessWidget {
               FilledButton(
                 onPressed: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CurrencyPage(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const CurrencyPage()),
                   );
                 },
                 child: const Row(
@@ -375,11 +371,7 @@ class _FeatureCard extends StatelessWidget {
               color: colors.primaryContainer,
               borderRadius: BorderRadius.circular(AppRadius.defaultRadius),
             ),
-            child: Icon(
-              icon,
-              color: colors.onPrimaryContainer,
-              size: 20,
-            ),
+            child: Icon(icon, color: colors.onPrimaryContainer, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(

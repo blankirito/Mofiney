@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum TransactionMode {
-  expense,
-  income,
-  transfer,
-  scan,
-}
+enum TransactionMode { expense, income, transfer, scan }
 
 class TransactionModeSwitcher extends StatelessWidget {
   final TransactionMode selectedMode;
@@ -74,10 +69,7 @@ class TransactionModeSwitcher extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 4,
-            vertical: 9,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
           decoration: BoxDecoration(
             color: selected
                 ? colors.surfaceContainerLowest
@@ -99,9 +91,7 @@ class TransactionModeSwitcher extends StatelessWidget {
               Icon(
                 icon,
                 size: 18,
-                color: selected
-                    ? colors.primary
-                    : colors.onSurfaceVariant,
+                color: selected ? colors.primary : colors.onSurfaceVariant,
               ),
               const SizedBox(height: 3),
               Text(
@@ -109,11 +99,8 @@ class TransactionModeSwitcher extends StatelessWidget {
                 maxLines: 1,
                 style: TextStyle(
                   fontSize: 10,
-                  fontWeight:
-                      selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected
-                      ? colors.primary
-                      : colors.onSurfaceVariant,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected ? colors.primary : colors.onSurfaceVariant,
                 ),
               ),
             ],

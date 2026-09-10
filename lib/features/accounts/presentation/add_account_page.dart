@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../domain/account.dart';
+import '../../../core/app_dependencies.dart';
+import '../../../core/currency/currency_catalog.dart';
+import '../../../core/currency/currency_picker.dart';
 
 class AddAccountPage extends StatefulWidget {
   const AddAccountPage({super.key});
@@ -23,6 +26,20 @@ class _AddAccountPageState extends State<AddAccountPage> {
 
   int _selectedColorIndex = 0;
   bool _isPrimaryAccount = false;
+  String _currencyCode = 'MYR';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBaseCurrency();
+  }
+
+  Future<void> _loadBaseCurrency() async {
+    await appSettingsRepository.ensureSettingsExist();
+    final settings = await appSettingsRepository.getSettings();
+    if (mounted)
+      setState(() => _currencyCode = settings?.baseCurrency ?? 'MYR');
+  }
 
   @override
   void dispose() {
@@ -70,12 +87,8 @@ class _AddAccountPageState extends State<AddAccountPage> {
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: _saveAccount,
-                  icon: const Icon(
-                    Icons.check_rounded,
-                  ),
-                  label: const Text(
-                    'Save Account',
-                  ),
+                  icon: const Icon(Icons.check_rounded),
+                  label: const Text('Save Account'),
                 ),
               ),
 
@@ -87,9 +100,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
                   onPressed: () {
                     Navigator.of(context).pop();
                   },
-                  child: const Text(
-                    'Cancel',
-                  ),
+                  child: const Text('Cancel'),
                 ),
               ),
 
@@ -102,18 +113,14 @@ class _AddAccountPageState extends State<AddAccountPage> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _saveAccount() {
     final name = _nameController.text.trim();
-    final balance = double.tryParse(
-      _balanceController.text.trim(),
-    );
+
+    final balance = double.tryParse(_balanceController.text.trim());
 
     if (name.isEmpty) {
       _showError('Please enter an account nickname.');
@@ -125,14 +132,13 @@ class _AddAccountPageState extends State<AddAccountPage> {
       return;
     }
 
-    if (_selectedType == AccountType.creditCard) {
-      final creditLimit = double.tryParse(
-        _creditLimitController.text.trim(),
-      );
+    double? creditLimit;
+    int? statementDay;
 
-      final statementDay = int.tryParse(
-        _statementCycleController.text.trim(),
-      );
+    if (_selectedType == AccountType.creditCard) {
+      creditLimit = double.tryParse(_creditLimitController.text.trim());
+
+      statementDay = int.tryParse(_statementCycleController.text.trim());
 
       if (creditLimit == null || creditLimit <= 0) {
         _showError('Please enter a valid credit limit.');
@@ -140,29 +146,29 @@ class _AddAccountPageState extends State<AddAccountPage> {
       }
 
       if (balance > creditLimit) {
-        _showError(
-          'Outstanding balance cannot exceed the credit limit.',
-        );
+        _showError('Outstanding balance cannot exceed the credit limit.');
         return;
       }
 
-      if (statementDay == null ||
-          statementDay < 1 ||
-          statementDay > 31) {
-        _showError(
-          'Statement cycle day must be between 1 and 31.',
-        );
+      if (statementDay == null || statementDay < 1 || statementDay > 31) {
+        _showError('Statement cycle day must be between 1 and 31.');
         return;
       }
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Account is valid. Local database will be connected next.',
-        ),
-      ),
+    final newAccount = Account(
+      id: 'account_${DateTime.now().microsecondsSinceEpoch}',
+      name: name,
+      type: _selectedType,
+      openingBalance: balance,
+      currencyCode: _currencyCode,
+      isPrimary: _isPrimaryAccount,
+      isActive: true,
+      creditLimit: creditLimit,
+      statementCycleDay: statementDay,
     );
+
+    Navigator.of(context).pop(newAccount);
   }
 
   Widget _buildAccountPreferencesCard(BuildContext context) {
@@ -183,9 +189,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.4),
-        ),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,41 +208,35 @@ class _AddAccountPageState extends State<AddAccountPage> {
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(
-              accentColors.length,
-              (index) {
-                final selected = _selectedColorIndex == index;
+            children: List.generate(accentColors.length, (index) {
+              final selected = _selectedColorIndex == index;
 
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedColorIndex = index;
-                    });
-                  },
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: accentColors[index],
-                      shape: BoxShape.circle,
-                      border: selected
-                          ? Border.all(
-                              color: colors.onSurface,
-                              width: 3,
-                            )
-                          : null,
-                    ),
-                    child: selected
-                        ? const Icon(
-                            Icons.check_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          )
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedColorIndex = index;
+                  });
+                },
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: accentColors[index],
+                    shape: BoxShape.circle,
+                    border: selected
+                        ? Border.all(color: colors.onSurface, width: 3)
                         : null,
                   ),
-                );
-              },
-            ),
+                  child: selected
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        )
+                      : null,
+                ),
+              );
+            }),
           ),
 
           const SizedBox(height: 22),
@@ -253,9 +251,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
             },
             title: const Text(
               'Set as Primary Account',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w600),
             ),
             subtitle: const Text(
               'Use this account as the default for new transactions.',
@@ -333,7 +329,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
           const SizedBox(height: 18),
 
           Text(
-            'BASE CURRENCY',
+            'ACCOUNT CURRENCY',
             style: TextStyle(
               fontSize: 11,
               letterSpacing: 1,
@@ -344,53 +340,65 @@ class _AddAccountPageState extends State<AddAccountPage> {
 
           const SizedBox(height: 8),
 
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colors.error,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: Text(
-                    'MY',
-                    style: TextStyle(
-                      color: colors.onError,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
+          InkWell(
+            onTap: () async {
+              final currency = await showCurrencyPicker(
+                context,
+                selectedCode: _currencyCode,
+                title: 'Account currency',
+              );
+              if (currency != null && mounted)
+                setState(() => _currencyCode = currency.code);
+            },
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.error,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text(
+                      _currencyCode,
+                      style: TextStyle(
+                        color: colors.onError,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
 
-                const SizedBox(width: 10),
+                  const SizedBox(width: 10),
 
-                Expanded(
-                  child: Text(
-                    'MYR — Malaysian Ringgit (RM)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: colors.onSurface,
+                  Expanded(
+                    child: Text(
+                      '${CurrencyCatalog.find(_currencyCode).code} — ${CurrencyCatalog.find(_currencyCode).name} (${CurrencyCatalog.find(_currencyCode).symbol})',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: colors.onSurface,
+                      ),
                     ),
                   ),
-                ),
 
-                Icon(
-                  Icons.lock_outline_rounded,
-                  size: 18,
-                  color: colors.onSurfaceVariant,
-                ),
-              ],
+                  Icon(
+                    Icons.unfold_more_rounded,
+                    size: 18,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -414,7 +422,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
             controller: _balanceController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
-              prefixText: 'RM ',
+              prefixText: '${CurrencyCatalog.find(_currencyCode).symbol} ',
               hintText: '0.00',
               filled: true,
               fillColor: colors.surfaceContainerLow,
@@ -461,7 +469,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
                 decimal: true,
               ),
               decoration: InputDecoration(
-                prefixText: 'RM ',
+                prefixText: '${CurrencyCatalog.find(_currencyCode).symbol} ',
                 hintText: '0.00',
                 filled: true,
                 fillColor: colors.surfaceContainerLow,
@@ -476,10 +484,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
 
             Text(
               'Total credit limit approved for this card.',
-              style: TextStyle(
-                fontSize: 11,
-                color: colors.onSurfaceVariant,
-              ),
+              style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
             ),
 
             const SizedBox(height: 18),
@@ -501,9 +506,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 hintText: 'e.g. 18',
-                prefixIcon: const Icon(
-                  Icons.calendar_month_rounded,
-                ),
+                prefixIcon: const Icon(Icons.calendar_month_rounded),
                 filled: true,
                 fillColor: colors.surfaceContainerLow,
                 border: OutlineInputBorder(
@@ -517,10 +520,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
 
             Text(
               'Enter a day from 1 to 31.',
-              style: TextStyle(
-                fontSize: 11,
-                color: colors.onSurfaceVariant,
-              ),
+              style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
             ),
           ],
         ],

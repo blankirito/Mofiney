@@ -28,18 +28,14 @@ class ForecastCategoryPreview {
   final ForecastChangeType changeType;
 }
 
-enum ForecastChangeType {
-  increase,
-  decrease,
-  stable,
-}
+enum ForecastChangeType { increase, decrease, stable }
 
 class ForecastPage extends StatelessWidget {
   const ForecastPage({super.key, required this.transactions});
 
   final List<Transaction> transactions;
 
-  DateTime get _referenceDate => DateTime(2026, 9, 1);
+  DateTime get _referenceDate => DateTime.now();
 
   List<String> get _previewInsights => const [
     'Food & Dining spending has increased for 3 consecutive months.',
@@ -119,6 +115,46 @@ class ForecastPage extends StatelessWidget {
     );
   }
 
+  double? get _forecastChangePercentage {
+    if (_sixMonthAverage <= 0) {
+      return null;
+    }
+
+    return ((_predictedNextMonthSpending - _sixMonthAverage) /
+            _sixMonthAverage) *
+        100;
+  }
+
+  int get _daysInCurrentMonth {
+    return DateTime(_referenceDate.year, _referenceDate.month + 1, 0).day;
+  }
+
+  double get _currentDailyPace {
+    final currentDay = _referenceDate.day;
+
+    if (currentDay <= 0) {
+      return 0;
+    }
+
+    return _currentMonthExpenses / currentDay;
+  }
+
+  double get _predictedNextMonthSpending {
+    if (_currentMonthExpenses <= 0) {
+      return _sixMonthAverage;
+    }
+
+    return _currentDailyPace * _daysInCurrentMonth;
+  }
+
+  double get _forecastLowerRange {
+    return _predictedNextMonthSpending * 0.9;
+  }
+
+  double get _forecastUpperRange {
+    return _predictedNextMonthSpending * 1.1;
+  }
+
   Widget _buildInsightsCard(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
@@ -128,28 +164,19 @@ class ForecastPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.4),
-        ),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.lightbulb_rounded,
-                size: 22,
-                color: colors.primary,
-              ),
+              Icon(Icons.lightbulb_rounded, size: 22, color: colors.primary),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
                   'Intelligent Insights',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
               ),
             ],
@@ -212,13 +239,8 @@ class ForecastPage extends StatelessWidget {
                   ),
                 );
               },
-              icon: const Icon(
-                Icons.tune_rounded,
-                size: 18,
-              ),
-              label: const Text(
-                'Set Preventive Budget Alert',
-              ),
+              icon: const Icon(Icons.tune_rounded, size: 18),
+              label: const Text('Set Preventive Budget Alert'),
             ),
           ),
 
@@ -259,8 +281,7 @@ class ForecastPage extends StatelessWidget {
   }) {
     final colors = Theme.of(context).colorScheme;
 
-    final percentage =
-        total <= 0 ? 0.0 : item.amount / total;
+    final percentage = total <= 0 ? 0.0 : item.amount / total;
 
     final IconData icon;
     final Color accentColor;
@@ -323,11 +344,7 @@ class ForecastPage extends StatelessWidget {
 
                       Row(
                         children: [
-                          Icon(
-                            icon,
-                            size: 14,
-                            color: accentColor,
-                          ),
+                          Icon(icon, size: 14, color: accentColor),
 
                           const SizedBox(width: 4),
 
@@ -399,9 +416,7 @@ class ForecastPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.4),
-        ),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -417,10 +432,7 @@ class ForecastPage extends StatelessWidget {
               const Expanded(
                 child: Text(
                   'Category-Level Breakdown',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
               ),
               Text(
@@ -475,8 +487,8 @@ class ForecastPage extends StatelessWidget {
     final maxValue = buckets.isEmpty
         ? 0.0
         : buckets
-            .map((bucket) => bucket.amount)
-            .reduce((a, b) => a > b ? a : b);
+              .map((bucket) => bucket.amount)
+              .reduce((a, b) => a > b ? a : b);
 
     return Container(
       width: double.infinity,
@@ -484,28 +496,19 @@ class ForecastPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.4),
-        ),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.bar_chart_rounded,
-                size: 20,
-                color: colors.primary,
-              ),
+              Icon(Icons.bar_chart_rounded, size: 20, color: colors.primary),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
                   '6-Month Trend & Projections',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
               ),
             ],
@@ -526,10 +529,7 @@ class ForecastPage extends StatelessWidget {
               const SizedBox(width: 5),
               Text(
                 'Actual',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: colors.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant),
               ),
               const SizedBox(width: 16),
               Container(
@@ -543,10 +543,7 @@ class ForecastPage extends StatelessWidget {
               const SizedBox(width: 5),
               Text(
                 'Preview',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: colors.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant),
               ),
             ],
           ),
@@ -832,7 +829,7 @@ class ForecastPage extends StatelessWidget {
     buckets.add(
       ForecastTrendBucket(
         label: _shortMonthName(nextMonth.month),
-        amount: 2680.00,
+        amount: _predictedNextMonthSpending,
         isPreview: true,
       ),
     );
@@ -945,10 +942,13 @@ class ForecastPage extends StatelessWidget {
   Widget _buildPredictionCard(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    const predictedAmount = 2680.00;
-    const lowerRange = 2450.00;
-    const upperRange = 2900.00;
-    const changePercentage = 12.4;
+    final predictedAmount = _predictedNextMonthSpending;
+
+    final lowerRange = _forecastLowerRange;
+
+    final upperRange = _forecastUpperRange;
+
+    final changePercentage = _forecastChangePercentage;
 
     return Container(
       width: double.infinity,
@@ -992,14 +992,16 @@ class ForecastPage extends StatelessWidget {
 
                     const SizedBox(width: 3),
 
-                    Text(
-                      '+${changePercentage.toStringAsFixed(1)}%',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: colors.onErrorContainer,
+                    if (changePercentage != null)
+                      Text(
+                        '${changePercentage >= 0 ? '+' : ''}'
+                        '${changePercentage.toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: colors.onErrorContainer,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),

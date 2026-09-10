@@ -5,8 +5,9 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 
 import '../../../core/utils/money_formatter.dart';
+import '../../../core/currency/currency_catalog.dart';
+import '../../../core/currency/currency_converter.dart';
 import '../domain/home_dashboard_data.dart';
-import '../domain/home_transaction.dart';
 import '../data/mock_home_dashboard_data.dart';
 
 import '../../transactions/presentation/add_expense_page.dart';
@@ -15,9 +16,16 @@ import '../../transactions/presentation/transfer_page.dart';
 import '../../transactions/presentation/scan_receipt_page.dart';
 import '../../analytics/presentation/spending_analysis_page.dart';
 import '../../analytics/presentation/forecast_page.dart';
-import '../../transactions/data/mock_transactions.dart';
 import '../../transactions/domain/transaction.dart';
 import '../../transactions/presentation/transaction_detail_page.dart';
+import '../../../core/app_dependencies.dart';
+
+import 'dart:async';
+
+import '../../accounts/domain/account.dart';
+import '../../accounts/domain/account_balance_calculator.dart';
+
+import '../../../core/database/app_database.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -30,6 +38,128 @@ class _HomePageState extends State<HomePage> {
   bool _balanceHidden = false;
 
   final HomeDashboardData _data = mockHomeDashboardData;
+
+  List<Transaction> _transactions = [];
+
+  List<Account> _accounts = [];
+
+  StreamSubscription<List<Transaction>>? _transactionsSubscription;
+
+  StreamSubscription<List<Account>>? _accountsSubscription;
+
+  AppSettingsEntry? _settings;
+  CurrencyConverter _converter = CurrencyConverter('MYR');
+
+  StreamSubscription<AppSettingsEntry?>? _settingsSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _watchAccounts();
+    _watchTransactions();
+    _watchSettings();
+  }
+
+  void _watchSettings() {
+    _settingsSubscription?.cancel();
+
+    _settingsSubscription = appSettingsRepository.watchSettings().listen(
+      (settings) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _settings = settings;
+        });
+        _refreshConversion();
+      },
+      onError: (Object error) {
+        debugPrint('Failed to watch home settings: $error');
+      },
+    );
+  }
+
+  void _watchAccounts() {
+    _accountsSubscription?.cancel();
+
+    _accountsSubscription = accountRepository.watchAllAccounts().listen(
+      (accounts) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _accounts = accounts;
+        });
+        _refreshConversion();
+      },
+      onError: (Object error) {
+        debugPrint('Failed to watch home accounts: $error');
+      },
+    );
+  }
+
+  void _watchTransactions() {
+    _transactionsSubscription?.cancel();
+
+    _transactionsSubscription = transactionRepository
+        .watchAllTransactions()
+        .listen(
+          (transactions) {
+            if (!mounted) {
+              return;
+            }
+
+            setState(() {
+              _transactions = transactions;
+            });
+            _refreshConversion();
+          },
+          onError: (Object error) {
+            debugPrint('Failed to watch home transactions: $error');
+          },
+        );
+  }
+
+  @override
+  void dispose() {
+    _accountsSubscription?.cancel();
+    _transactionsSubscription?.cancel();
+    _settingsSubscription?.cancel();
+
+    super.dispose();
+  }
+
+  double? get _monthlyBudget => _settings?.monthlyBudget;
+
+  String get _baseCurrency => _settings?.baseCurrency ?? 'MYR';
+
+  String get _currencySymbol {
+    return CurrencyCatalog.find(_baseCurrency).symbol;
+  }
+
+  Future<void> _refreshConversion() async {
+    final base = _baseCurrency;
+    final converter = CurrencyConverter(base);
+    await converter.warm(_accounts.map((account) => account.currencyCode));
+    if (mounted && base == _baseCurrency)
+      setState(() => _converter = converter);
+  }
+
+  String _transactionCurrency(Transaction transaction) {
+    for (final account in _accounts) {
+      if (account.id == transaction.accountId) return account.currencyCode;
+    }
+    return 'MYR';
+  }
+
+  double _convertTransaction(Transaction transaction) =>
+      _converter.convert(transaction.amount, _transactionCurrency(transaction));
+
+  double _convertAccount(double amount, Account account) =>
+      _converter.convert(amount, account.currencyCode);
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +185,15 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: AppSpacing.md),
 
               _BalanceCard(
-                data: _data,
+                currencySymbol: _currencySymbol,
+                totalBalance: _totalLiquidity,
+                todaySpent: _todaySpent,
+                monthlySpent: _monthlySpent,
+                monthlyIncome: _monthlyIncome,
+                remainingBudget: _remainingBudget,
+                budgetUsedPercentage: _budgetUsedPercentage,
+                budgetRemainingPercentage: _budgetRemainingPercentage,
+                isHealthySpendingPace: _isHealthySpendingPace,
                 balanceHidden: _balanceHidden,
                 onToggleVisibility: () {
                   setState(() {
@@ -71,13 +209,18 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: AppSpacing.md),
 
               _SpendingOverviewCard(
-                currencySymbol: _data.currencySymbol,
-                values: _data.dailySpending,
+                currencySymbol: _currencySymbol,
+                dailyValues: _dailySpendingCurrentMonth,
+                monthlyValues: _monthlySpendingCurrentYear,
+                referenceDate: DateTime.now(),
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const SpendingAnalysisPage(),
+                      builder: (_) => SpendingAnalysisPage(
+                        transactions: _transactions,
+                        accounts: _accounts,
+                      ),
                     ),
                   );
                 },
@@ -85,16 +228,14 @@ class _HomePageState extends State<HomePage> {
 
               const SizedBox(height: AppSpacing.md),
 
-              _SpendingForecastCard(
-                data: _data,
-                transactions: mockTransactions,
-              ),
+              _SpendingForecastCard(data: _data, transactions: _transactions),
 
               const SizedBox(height: AppSpacing.md),
 
               _RecentTransactionsSection(
-                currencySymbol: _data.currencySymbol,
+                currencySymbol: _currencySymbol,
                 transactions: _recentTransactions,
+                convertedAmount: _convertTransaction,
               ),
             ],
           ),
@@ -103,11 +244,218 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  List<Transaction> get _recentTransactions {
-    final transactions = [...mockTransactions]
-      ..sort(
-        (a, b) => b.dateTime.compareTo(a.dateTime),
+  bool get _isHealthySpendingPace {
+    final monthlyBudget = _monthlyBudget;
+
+    if (monthlyBudget == null || monthlyBudget <= 0) {
+      return true;
+    }
+
+    final now = DateTime.now();
+
+    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+
+    final expectedSpentByToday = monthlyBudget * (now.day / daysInMonth);
+
+    return _monthlySpent <= expectedSpentByToday;
+  }
+
+  String get _greeting {
+    final hour = DateTime.now().hour;
+
+    if (hour < 12) {
+      return 'Good morning';
+    }
+
+    if (hour < 18) {
+      return 'Good afternoon';
+    }
+
+    return 'Good evening';
+  }
+
+  String get _formattedToday {
+    final now = DateTime.now();
+
+    const weekdays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    return '${weekdays[now.weekday - 1]}, '
+        '${now.day} ${months[now.month - 1]} ${now.year}';
+  }
+
+  double get _totalLiquidity {
+    double totalAssets = 0;
+    double totalLiabilities = 0;
+
+    for (final account in _accounts) {
+      if (!account.isActive) {
+        continue;
+      }
+
+      final balance = AccountBalanceCalculator.calculate(
+        account,
+        _transactions,
       );
+
+      if (account.type == AccountType.creditCard) {
+        totalLiabilities += _convertAccount(balance, account);
+      } else {
+        totalAssets += _convertAccount(balance, account);
+      }
+    }
+
+    return totalAssets - totalLiabilities;
+  }
+
+  double get _todaySpent {
+    final now = DateTime.now();
+
+    return _transactions
+        .where((transaction) {
+          return transaction.type == TransactionType.expense &&
+              transaction.dateTime.year == now.year &&
+              transaction.dateTime.month == now.month &&
+              transaction.dateTime.day == now.day;
+        })
+        .fold(
+          0.0,
+          (sum, transaction) => sum + _convertTransaction(transaction),
+        );
+  }
+
+  List<double> get _dailySpendingCurrentMonth {
+    final now = DateTime.now();
+
+    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+
+    final values = List<double>.filled(daysInMonth, 0);
+
+    for (final transaction in _transactions) {
+      final isCurrentMonth =
+          transaction.dateTime.year == now.year &&
+          transaction.dateTime.month == now.month;
+
+      if (transaction.type != TransactionType.expense || !isCurrentMonth) {
+        continue;
+      }
+
+      final index = transaction.dateTime.day - 1;
+
+      if (index >= 0 && index < values.length) {
+        values[index] += _convertTransaction(transaction);
+      }
+    }
+
+    return values;
+  }
+
+  List<double> get _monthlySpendingCurrentYear {
+    final now = DateTime.now();
+
+    final values = List<double>.filled(12, 0);
+
+    for (final transaction in _transactions) {
+      if (transaction.type != TransactionType.expense ||
+          transaction.dateTime.year != now.year) {
+        continue;
+      }
+
+      final index = transaction.dateTime.month - 1;
+
+      values[index] += _convertTransaction(transaction);
+    }
+
+    return values;
+  }
+
+  double get _monthlySpent {
+    final now = DateTime.now();
+
+    return _transactions
+        .where((transaction) {
+          return transaction.type == TransactionType.expense &&
+              transaction.dateTime.year == now.year &&
+              transaction.dateTime.month == now.month;
+        })
+        .fold(
+          0.0,
+          (sum, transaction) => sum + _convertTransaction(transaction),
+        );
+  }
+
+  double get _monthlyIncome {
+    final now = DateTime.now();
+
+    return _transactions
+        .where((transaction) {
+          return transaction.type == TransactionType.income &&
+              transaction.dateTime.year == now.year &&
+              transaction.dateTime.month == now.month;
+        })
+        .fold(
+          0.0,
+          (sum, transaction) => sum + _convertTransaction(transaction),
+        );
+  }
+
+  double get _remainingBudget {
+    final monthlyBudget = _monthlyBudget;
+
+    if (monthlyBudget == null) {
+      return 0;
+    }
+
+    return (monthlyBudget - _monthlySpent)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+  }
+
+  double? get _budgetUsedPercentage {
+    final monthlyBudget = _monthlyBudget;
+
+    if (monthlyBudget == null || monthlyBudget <= 0) {
+      return null;
+    }
+
+    return (_monthlySpent / monthlyBudget) * 100;
+  }
+
+  double? get _budgetRemainingPercentage {
+    final used = _budgetUsedPercentage;
+
+    if (used == null) {
+      return null;
+    }
+
+    return (100 - used).clamp(0.0, 100.0).toDouble();
+  }
+
+  List<Transaction> get _recentTransactions {
+    final transactions = [..._transactions]
+      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
     return transactions.take(4).toList();
   }
@@ -190,7 +538,7 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   Flexible(
                     child: Text(
-                      'Good afternoon',
+                      _greeting,
                       style: AppTextStyles.headlineMedium.copyWith(
                         color: colors.onSurface,
                         fontWeight: FontWeight.w700,
@@ -203,7 +551,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 2),
               Text(
-                'Tuesday, 8 Sep 2026',
+                _formattedToday,
                 style: AppTextStyles.bodySmall.copyWith(
                   color: colors.onSurfaceVariant,
                 ),
@@ -231,7 +579,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 6),
               Text(
-                '${_data.currencyCode} · ACTIVE',
+                '$_baseCurrency · ACTIVE',
                 style: AppTextStyles.labelCaps.copyWith(
                   color: colors.onSurfaceVariant,
                   fontSize: 9,
@@ -254,7 +602,10 @@ class _HomePageState extends State<HomePage> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const AddExpensePage()),
+                MaterialPageRoute(
+                  builder: (_) =>
+                      AddExpensePage(repository: transactionRepository),
+                ),
               );
             },
           ),
@@ -311,14 +662,34 @@ class _HomePageState extends State<HomePage> {
 
 class _BalanceCard extends StatelessWidget {
   const _BalanceCard({
-    required this.data,
+    required this.currencySymbol,
+    required this.totalBalance,
+    required this.todaySpent,
+    required this.monthlySpent,
+    required this.monthlyIncome,
+    required this.remainingBudget,
+    required this.budgetUsedPercentage,
+    required this.budgetRemainingPercentage,
     required this.balanceHidden,
     required this.onToggleVisibility,
+    required this.isHealthySpendingPace,
   });
 
-  final HomeDashboardData data;
+  final double totalBalance;
+  final double todaySpent;
+  final double monthlySpent;
+  final double monthlyIncome;
+  final double remainingBudget;
+
+  final double? budgetUsedPercentage;
+  final double? budgetRemainingPercentage;
+
   final bool balanceHidden;
   final VoidCallback onToggleVisibility;
+
+  final bool isHealthySpendingPace;
+
+  final String currencySymbol;
 
   @override
   Widget build(BuildContext context) {
@@ -383,7 +754,7 @@ class _BalanceCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                data.currencySymbol,
+                currencySymbol,
                 style: AppTextStyles.headlineSmall.copyWith(
                   color: colors.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
@@ -395,7 +766,7 @@ class _BalanceCard extends StatelessWidget {
               Text(
                 balanceHidden
                     ? '••••••'
-                    : MoneyFormatter.amountOnly(data.totalBalance),
+                    : MoneyFormatter.amountOnly(totalBalance),
                 style: AppTextStyles.displayHeroMobile.copyWith(
                   color: colors.onSurface,
                 ),
@@ -416,7 +787,7 @@ class _BalanceCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppRadius.full),
                 ),
                 child: Text(
-                  'Today: ${MoneyFormatter.format(amount: data.todaySpent, symbol: data.currencySymbol)}',
+                  'Today: ${MoneyFormatter.format(amount: todaySpent, symbol: currencySymbol)}',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: colors.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
@@ -430,7 +801,7 @@ class _BalanceCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppRadius.full),
                 ),
                 child: Text(
-                  'Healthy Pace',
+                  isHealthySpendingPace ? 'Healthy Pace' : 'Above Pace',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: colors.onTertiaryContainer,
                     fontWeight: FontWeight.w600,
@@ -448,25 +819,25 @@ class _BalanceCard extends StatelessWidget {
                 child: _MetricCard(
                   title: 'Spent',
                   value: MoneyFormatter.format(
-                    amount: data.monthlySpent,
-                    symbol: data.currencySymbol,
+                    amount: monthlySpent,
+                    symbol: currencySymbol,
                   ),
-                  subtitle: data.budgetUsedPercentage == null
+                  subtitle: budgetUsedPercentage == null
                       ? 'No budget set'
-                      : '${data.budgetUsedPercentage!.toStringAsFixed(0)}% of cap',
+                      : '${budgetUsedPercentage!.toStringAsFixed(0)}% of cap',
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: _MetricCard(
-                  title: 'Remaining',
+                  title: 'Budget Left',
                   value: MoneyFormatter.format(
-                    amount: data.remainingBudget,
-                    symbol: data.currencySymbol,
+                    amount: remainingBudget,
+                    symbol: currencySymbol,
                   ),
-                  subtitle: data.budgetRemainingPercentage == null
+                  subtitle: budgetRemainingPercentage == null
                       ? 'No budget set'
-                      : '${data.budgetRemainingPercentage!.toStringAsFixed(0)}% left',
+                      : '${budgetRemainingPercentage!.toStringAsFixed(0)}% left',
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
@@ -474,8 +845,8 @@ class _BalanceCard extends StatelessWidget {
                 child: _MetricCard(
                   title: 'Income',
                   value: MoneyFormatter.format(
-                    amount: data.monthlyIncome,
-                    symbol: data.currencySymbol,
+                    amount: monthlyIncome,
+                    symbol: currencySymbol,
                   ),
                   subtitle: 'This month',
                 ),
@@ -601,12 +972,19 @@ class _QuickActionCard extends StatelessWidget {
 class _SpendingOverviewCard extends StatefulWidget {
   const _SpendingOverviewCard({
     required this.currencySymbol,
-    required this.values,
+    required this.dailyValues,
+    required this.monthlyValues,
+    required this.referenceDate,
     required this.onTap,
   });
 
   final String currencySymbol;
-  final List<double> values;
+
+  final List<double> dailyValues;
+  final List<double> monthlyValues;
+
+  final DateTime referenceDate;
+
   final VoidCallback onTap;
 
   @override
@@ -619,6 +997,26 @@ class _SpendingOverviewCardState extends State<_SpendingOverviewCard> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final values = _showMonth ? widget.dailyValues : widget.monthlyValues;
+
+    String monthName(int month) {
+      const months = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December',
+      ];
+
+      return months[month - 1];
+    }
 
     return Material(
       color: Colors.transparent,
@@ -716,7 +1114,10 @@ class _SpendingOverviewCardState extends State<_SpendingOverviewCard> {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          _showMonth ? 'September 2026' : '2026',
+                          _showMonth
+                              ? '${monthName(widget.referenceDate.month)} '
+                                    '${widget.referenceDate.year}'
+                              : '${widget.referenceDate.year}',
                           style: AppTextStyles.bodySmall.copyWith(
                             color: colors.onSurface,
                             fontWeight: FontWeight.w600,
@@ -746,7 +1147,9 @@ class _SpendingOverviewCardState extends State<_SpendingOverviewCard> {
                       ),
                       const SizedBox(width: 5),
                       Text(
-                        _showMonth ? 'Today (Day 5)' : 'Current year',
+                        _showMonth
+                            ? 'Today (Day ${widget.referenceDate.day})'
+                            : 'Current year',
                         style: AppTextStyles.bodySmall.copyWith(
                           color: colors.onSurfaceVariant,
                           fontSize: 10,
@@ -773,11 +1176,9 @@ class _SpendingOverviewCardState extends State<_SpendingOverviewCard> {
                           ),
                           TextSpan(
                             text: MoneyFormatter.format(
-                              amount: widget.values.isEmpty
+                              amount: values.isEmpty
                                   ? 0
-                                  : widget.values.reduce(
-                                      (a, b) => a > b ? a : b,
-                                    ),
+                                  : values.reduce((a, b) => a > b ? a : b),
                               symbol: widget.currencySymbol,
                             ),
                             style: AppTextStyles.amountSmall.copyWith(
@@ -790,7 +1191,7 @@ class _SpendingOverviewCardState extends State<_SpendingOverviewCard> {
                     ),
                   ),
                   Text(
-                    _showMonth ? '30-day projection' : '12-month view',
+                    _showMonth ? 'Daily spending' : '12-month view',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: colors.onSurfaceVariant,
                       fontSize: 10,
@@ -803,23 +1204,33 @@ class _SpendingOverviewCardState extends State<_SpendingOverviewCard> {
 
               SizedBox(
                 height: 120,
-                child: _showMonth
-                    ? _DailyBarChart(values: widget.values)
-                    : _YearPlaceholder(),
+                child: _DailyBarChart(
+                  values: values,
+                  currentIndex: _showMonth
+                      ? widget.referenceDate.day - 1
+                      : widget.referenceDate.month - 1,
+                ),
               ),
 
               const SizedBox(height: 8),
 
-              if (_showMonth)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _AxisLabel(label: 'Day 1'),
-                    _AxisLabel(label: 'Day 10'),
-                    _AxisLabel(label: 'Day 20'),
-                    _AxisLabel(label: 'Day 30'),
-                  ],
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: _showMonth
+                    ? const [
+                        _AxisLabel(label: 'Day 1'),
+                        _AxisLabel(label: 'Day 10'),
+                        _AxisLabel(label: 'Day 20'),
+                        _AxisLabel(label: 'Day 30'),
+                      ]
+                    : const [
+                        _AxisLabel(label: 'Jan'),
+                        _AxisLabel(label: 'Apr'),
+                        _AxisLabel(label: 'Jul'),
+                        _AxisLabel(label: 'Oct'),
+                        _AxisLabel(label: 'Dec'),
+                      ],
+              ),
             ],
           ),
         ),
@@ -866,9 +1277,10 @@ class _TimeRangeButton extends StatelessWidget {
 }
 
 class _DailyBarChart extends StatelessWidget {
-  const _DailyBarChart({required this.values});
+  const _DailyBarChart({required this.values, required this.currentIndex});
 
   final List<double> values;
+  final int currentIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -904,10 +1316,10 @@ class _DailyBarChart extends StatelessWidget {
         final value = values[index];
         final heightFactor = (value / maxValue).clamp(0.08, 1.0);
 
-        final day = index + 1;
         final isPeak = value == maxValue;
-        final isToday = day == 5;
-        final isFuture = day > 5;
+        final isToday = index == currentIndex;
+
+        final isFuture = index > currentIndex;
 
         Color barColor;
 
@@ -951,20 +1363,6 @@ class _DailyBarChart extends StatelessWidget {
   }
 }
 
-class _YearPlaceholder extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return Center(
-      child: Text(
-        'Year view will use monthly totals',
-        style: AppTextStyles.bodySmall.copyWith(color: colors.onSurfaceVariant),
-      ),
-    );
-  }
-}
-
 class _AxisLabel extends StatelessWidget {
   const _AxisLabel({required this.label});
 
@@ -988,10 +1386,12 @@ class _RecentTransactionsSection extends StatelessWidget {
   const _RecentTransactionsSection({
     required this.currencySymbol,
     required this.transactions,
+    required this.convertedAmount,
   });
 
   final String currencySymbol;
   final List<Transaction> transactions;
+  final double Function(Transaction) convertedAmount;
 
   @override
   Widget build(BuildContext context) {
@@ -1039,6 +1439,7 @@ class _RecentTransactionsSection extends StatelessWidget {
                   _TransactionRow(
                     transaction: transaction,
                     currencySymbol: currencySymbol,
+                    convertedAmount: convertedAmount(transaction),
                   ),
                   if (index != transactions.length - 1)
                     Padding(
@@ -1062,10 +1463,12 @@ class _TransactionRow extends StatelessWidget {
   const _TransactionRow({
     required this.transaction,
     required this.currencySymbol,
+    required this.convertedAmount,
   });
 
   final Transaction transaction;
   final String currencySymbol;
+  final double convertedAmount;
 
   String _buildSubtitle(Transaction transaction) {
     final dateTime = transaction.dateTime;
@@ -1085,8 +1488,7 @@ class _TransactionRow extends StatelessWidget {
       'Dec',
     ];
 
-    final date =
-        '${months[dateTime.month - 1]} ${dateTime.day}';
+    final date = '${months[dateTime.month - 1]} ${dateTime.day}';
 
     if (transaction.type == TransactionType.transfer) {
       return 'Transfer · $date';
@@ -1106,15 +1508,13 @@ class _TransactionRow extends StatelessWidget {
     switch (transaction.type) {
       case TransactionType.expense:
         accentColor = colors.error;
-        iconBackground =
-            colors.errorContainer.withValues(alpha: 0.65);
+        iconBackground = colors.errorContainer.withValues(alpha: 0.65);
         icon = Icons.shopping_bag_outlined;
         break;
 
       case TransactionType.income:
         accentColor = colors.tertiary;
-        iconBackground =
-            colors.tertiaryContainer.withValues(alpha: 0.45);
+        iconBackground = colors.tertiaryContainer.withValues(alpha: 0.45);
         icon = Icons.payments_outlined;
         break;
 
@@ -1132,6 +1532,7 @@ class _TransactionRow extends StatelessWidget {
           MaterialPageRoute(
             builder: (_) => TransactionDetailPage(
               transaction: transaction,
+              repository: transactionRepository,
             ),
           ),
         );
@@ -1186,11 +1587,10 @@ class _TransactionRow extends StatelessWidget {
                 Text(
                   MoneyFormatter.format(
                     amount: transaction.type == TransactionType.expense
-                        ? -transaction.amount.abs()
-                        : transaction.amount.abs(),
+                        ? -convertedAmount.abs()
+                        : convertedAmount.abs(),
                     symbol: currencySymbol,
-                    showSign:
-                        transaction.type != TransactionType.transfer,
+                    showSign: transaction.type != TransactionType.transfer,
                   ),
                   style: AppTextStyles.amountMedium.copyWith(
                     color: accentColor,
@@ -1217,10 +1617,7 @@ class _TransactionRow extends StatelessWidget {
 }
 
 class _SpendingForecastCard extends StatelessWidget {
-  const _SpendingForecastCard({
-    required this.data,
-    required this.transactions,
-  });
+  const _SpendingForecastCard({required this.data, required this.transactions});
 
   final HomeDashboardData data;
   final List<Transaction> transactions;
@@ -1385,9 +1782,7 @@ class _SpendingForecastCard extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ForecastPage(
-                      transactions: transactions,
-                    ),
+                    builder: (_) => ForecastPage(transactions: transactions),
                   ),
                 );
               },

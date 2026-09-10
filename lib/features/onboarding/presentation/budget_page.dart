@@ -10,10 +10,7 @@ import 'widgets/onboarding_header.dart';
 import '../domain/onboarding_data.dart';
 
 class BudgetPage extends StatefulWidget {
-  const BudgetPage({
-    super.key,
-    required this.data,
-  });
+  const BudgetPage({super.key, required this.data});
 
   final OnboardingData data;
 
@@ -24,14 +21,7 @@ class BudgetPage extends StatefulWidget {
 class _BudgetPageState extends State<BudgetPage> {
   double selectedBudget = 4000;
 
-  final List<double?> presets = [
-    2500,
-    3500,
-    4000,
-    5000,
-    6000,
-    null,
-  ];
+  final List<double?> presets = [2500, 3500, 4000, 5000, 6000, null];
 
   @override
   Widget build(BuildContext context) {
@@ -110,11 +100,11 @@ class _BudgetPageState extends State<BudgetPage> {
                       itemCount: presets.length,
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        childAspectRatio: 2.55,
-                      ),
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 2.55,
+                          ),
                       itemBuilder: (context, index) {
                         final value = presets[index];
 
@@ -159,8 +149,8 @@ class _BudgetPageState extends State<BudgetPage> {
               onSkip: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => AccountSetupPage(data: widget.data,),
-                  )
+                    builder: (_) => AccountSetupPage(data: widget.data),
+                  ),
                 );
               },
             ),
@@ -182,9 +172,7 @@ class _BudgetPageState extends State<BudgetPage> {
           title: const Text('Custom monthly budget'),
           content: TextField(
             controller: controller,
-            keyboardType: const TextInputType.numberWithOptions(
-              decimal: true,
-            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
               prefixText: '${widget.data.currencySymbol} ',
               hintText: 'Enter amount',
@@ -240,17 +228,12 @@ class _BudgetSummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(
-          color: colors.outlineVariant,
-        ),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 5,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
               color: colors.primaryContainer,
               borderRadius: BorderRadius.circular(AppRadius.full),
@@ -303,25 +286,16 @@ class _BudgetSummaryCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
 
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 7,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             decoration: BoxDecoration(
               color: colors.primaryContainer.withValues(alpha: 0.65),
               borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(
-                color: colors.primary.withValues(alpha: 0.16),
-              ),
+              border: Border.all(color: colors.primary.withValues(alpha: 0.16)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.bolt_rounded,
-                  size: 16,
-                  color: colors.primary,
-                ),
+                Icon(Icons.bolt_rounded, size: 16, color: colors.primary),
                 const SizedBox(width: 6),
                 Text(
                   '≈ $currencySymbol ${dailyTarget.toStringAsFixed(2)} / day target pace',
@@ -358,9 +332,7 @@ class _BudgetPresetButton extends StatelessWidget {
     final isCustom = value == null;
 
     return Material(
-      color: selected
-          ? colors.primaryContainer
-          : colors.surfaceContainerLowest,
+      color: selected ? colors.primaryContainer : colors.surfaceContainerLowest,
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: InkWell(
         onTap: onTap,
@@ -370,9 +342,7 @@ class _BudgetPresetButton extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(
-              color: selected
-                  ? colors.primary
-                  : colors.outlineVariant,
+              color: selected ? colors.primary : colors.outlineVariant,
               width: selected ? 2 : 1,
             ),
           ),
@@ -381,11 +351,8 @@ class _BudgetPresetButton extends StatelessWidget {
                 ? 'Custom'
                 : '$currencySymbol ${value!.toStringAsFixed(0)}',
             style: AppTextStyles.bodySmall.copyWith(
-              color: selected
-                  ? colors.primary
-                  : colors.onSurface,
-              fontWeight:
-                  selected ? FontWeight.w700 : FontWeight.w600,
+              color: selected ? colors.primary : colors.onSurface,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
             ),
           ),
         ),
@@ -404,18 +371,12 @@ class _BudgetDisclaimer extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(
-          color: colors.outlineVariant,
-        ),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.verified_user_outlined,
-            color: colors.primary,
-            size: 20,
-          ),
+          Icon(Icons.verified_user_outlined, color: colors.primary, size: 20),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
@@ -433,10 +394,7 @@ class _BudgetDisclaimer extends StatelessWidget {
 }
 
 class _BudgetBottomActions extends StatelessWidget {
-  const _BudgetBottomActions({
-    required this.onSetBudget,
-    required this.onSkip,
-  });
+  const _BudgetBottomActions({required this.onSetBudget, required this.onSkip});
 
   final VoidCallback onSetBudget;
   final VoidCallback onSkip;
@@ -465,10 +423,7 @@ class _BudgetBottomActions extends StatelessWidget {
                 children: [
                   Text('Set Budget'),
                   SizedBox(width: AppSpacing.xs),
-                  Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 18,
-                  ),
+                  Icon(Icons.arrow_forward_rounded, size: 18),
                 ],
               ),
             ),

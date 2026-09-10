@@ -4,16 +4,14 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 
-enum _ExportFormat {
-  csv,
-  pdf,
-}
+import 'package:share_plus/share_plus.dart';
 
-enum _DateRange {
-  allTime,
-  thisMonth,
-  thisYear,
-}
+import '../../../core/app_dependencies.dart';
+import '../domain/export_options.dart';
+
+enum _ExportFormat { csv, pdf }
+
+enum _DateRange { allTime, thisMonth, thisYear }
 
 class ExportFinancialDataPage extends StatefulWidget {
   const ExportFinancialDataPage({super.key});
@@ -23,8 +21,7 @@ class ExportFinancialDataPage extends StatefulWidget {
       _ExportFinancialDataPageState();
 }
 
-class _ExportFinancialDataPageState
-    extends State<ExportFinancialDataPage> {
+class _ExportFinancialDataPageState extends State<ExportFinancialDataPage> {
   _ExportFormat _format = _ExportFormat.csv;
   _DateRange _dateRange = _DateRange.allTime;
 
@@ -32,15 +29,72 @@ class _ExportFinancialDataPageState
   bool _includeAccounts = true;
   bool _includeCategories = true;
   bool _includeBudgets = true;
+  bool _isExporting = false;
+
+  Future<void> _exportCsv() async {
+    if (_format == _ExportFormat.pdf) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'PDF export will be added next. Please choose CSV for now.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isExporting = true;
+    });
+
+    try {
+      final files = await financialExportService.createCsvExports(
+        ExportOptions(
+          dateRange: switch (_dateRange) {
+            _DateRange.allTime => ExportDateRange.allTime,
+            _DateRange.thisMonth => ExportDateRange.thisMonth,
+            _DateRange.thisYear => ExportDateRange.thisYear,
+          },
+          includeTransactions: _includeTransactions,
+          includeAccounts: _includeAccounts,
+          includeCategories: _includeCategories,
+          includeBudgets: _includeBudgets,
+        ),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: files.map((file) => XFile(file.path)).toList(),
+          text: 'Mofiney financial data export',
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to export data: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Export Financial Data'),
-      ),
+      appBar: AppBar(title: const Text('Export Financial Data')),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -110,10 +164,8 @@ class _ExportFinancialDataPageState
               const SizedBox(height: AppSpacing.sm),
 
               DropdownButtonFormField<_DateRange>(
-                value: _dateRange,
-                decoration: const InputDecoration(
-                  labelText: 'Export Period',
-                ),
+                initialValue: _dateRange,
+                decoration: const InputDecoration(labelText: 'Export Period'),
                 items: const [
                   DropdownMenuItem(
                     value: _DateRange.allTime,
@@ -155,13 +207,9 @@ class _ExportFinancialDataPageState
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: colors.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(
-                    AppRadius.xl,
-                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.xl),
                   border: Border.all(
-                    color: colors.outlineVariant.withValues(
-                      alpha: 0.4,
-                    ),
+                    color: colors.outlineVariant.withValues(alpha: 0.4),
                   ),
                 ),
                 child: Column(
@@ -199,9 +247,7 @@ class _ExportFinancialDataPageState
                     CheckboxListTile(
                       value: _includeCategories,
                       title: const Text('Categories'),
-                      subtitle: const Text(
-                        'Expense and income categories',
-                      ),
+                      subtitle: const Text('Expense and income categories'),
                       onChanged: (value) {
                         setState(() {
                           _includeCategories = value ?? false;
@@ -214,9 +260,7 @@ class _ExportFinancialDataPageState
                     CheckboxListTile(
                       value: _includeBudgets,
                       title: const Text('Budgets'),
-                      subtitle: const Text(
-                        'Monthly and category budgets',
-                      ),
+                      subtitle: const Text('Monthly and category budgets'),
                       onChanged: (value) {
                         setState(() {
                           _includeBudgets = value ?? false;
@@ -234,9 +278,7 @@ class _ExportFinancialDataPageState
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 decoration: BoxDecoration(
                   color: colors.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(
-                    AppRadius.md,
-                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,23 +308,12 @@ class _ExportFinancialDataPageState
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _canExport
-                      ? () {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                '${_format == _ExportFormat.csv ? 'CSV' : 'PDF'} export will be connected after Local DB.',
-                              ),
-                            ),
-                          );
-                        }
-                      : null,
-                  icon: const Icon(
-                    Icons.file_download_outlined,
-                  ),
+                  onPressed: _canExport && !_isExporting ? _exportCsv : null,
+                  icon: const Icon(Icons.file_download_outlined),
                   label: Text(
-                    _format == _ExportFormat.csv
+                    _isExporting
+                        ? 'Preparing export...'
+                        : _format == _ExportFormat.csv
                         ? 'Export CSV'
                         : 'Export PDF',
                   ),
@@ -323,26 +354,18 @@ class _FormatCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(
-        AppRadius.xl,
-      ),
+      borderRadius: BorderRadius.circular(AppRadius.xl),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: selected
-              ? colors.primaryContainer.withValues(
-                  alpha: 0.35,
-                )
+              ? colors.primaryContainer.withValues(alpha: 0.35)
               : colors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(
-            AppRadius.xl,
-          ),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
           border: Border.all(
             color: selected
                 ? colors.primary
-                : colors.outlineVariant.withValues(
-                    alpha: 0.4,
-                  ),
+                : colors.outlineVariant.withValues(alpha: 0.4),
           ),
         ),
         child: Column(
@@ -350,9 +373,7 @@ class _FormatCard extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: selected
-                  ? colors.primary
-                  : colors.onSurfaceVariant,
+              color: selected ? colors.primary : colors.onSurfaceVariant,
             ),
 
             const SizedBox(height: AppSpacing.sm),
@@ -380,9 +401,7 @@ class _FormatCard extends StatelessWidget {
               selected
                   ? Icons.check_circle_rounded
                   : Icons.radio_button_unchecked_rounded,
-              color: selected
-                  ? colors.primary
-                  : colors.onSurfaceVariant,
+              color: selected ? colors.primary : colors.onSurfaceVariant,
             ),
           ],
         ),

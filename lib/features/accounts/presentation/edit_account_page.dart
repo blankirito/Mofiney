@@ -3,20 +3,15 @@ import 'package:flutter/material.dart';
 import '../domain/account.dart';
 
 class EditAccountPage extends StatefulWidget {
-  const EditAccountPage({
-    super.key,
-    required this.account,
-  });
+  const EditAccountPage({super.key, required this.account});
 
   final Account account;
 
   @override
-  State<EditAccountPage> createState() =>
-      _EditAccountPageState();
+  State<EditAccountPage> createState() => _EditAccountPageState();
 }
 
 class _EditAccountPageState extends State<EditAccountPage> {
-
   late final TextEditingController _nameController;
   late final TextEditingController _balanceController;
   late final TextEditingController _creditLimitController;
@@ -27,9 +22,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
   void initState() {
     super.initState();
 
-    _nameController = TextEditingController(
-      text: widget.account.name,
-    );
+    _nameController = TextEditingController(text: widget.account.name);
 
     _balanceController = TextEditingController(
       text: widget.account.openingBalance.toStringAsFixed(2),
@@ -55,12 +48,67 @@ class _EditAccountPageState extends State<EditAccountPage> {
     super.dispose();
   }
 
+  void _showError(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _saveChanges() {
+    final name = _nameController.text.trim();
+
+    final balance = double.tryParse(_balanceController.text.trim());
+
+    if (name.isEmpty) {
+      _showError('Please enter an account nickname.');
+      return;
+    }
+
+    if (balance == null || balance < 0) {
+      _showError('Please enter a valid opening balance.');
+      return;
+    }
+
+    double? creditLimit;
+    int? statementCycleDay;
+
+    if (widget.account.type == AccountType.creditCard) {
+      creditLimit = double.tryParse(_creditLimitController.text.trim());
+
+      statementCycleDay = int.tryParse(_statementCycleController.text.trim());
+
+      if (creditLimit == null || creditLimit <= 0) {
+        _showError('Please enter a valid credit limit.');
+        return;
+      }
+
+      if (balance > creditLimit) {
+        _showError('Outstanding balance cannot exceed the credit limit.');
+        return;
+      }
+
+      if (statementCycleDay == null ||
+          statementCycleDay < 1 ||
+          statementCycleDay > 31) {
+        _showError('Statement cycle day must be between 1 and 31.');
+        return;
+      }
+    }
+
+    final updatedAccount = widget.account.copyWith(
+      name: name,
+      openingBalance: balance,
+      isPrimary: _isPrimaryAccount,
+      creditLimit: creditLimit,
+      statementCycleDay: statementCycleDay,
+    );
+
+    Navigator.of(context).pop(updatedAccount);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit Account'),
-      ),
+      appBar: AppBar(title: const Text('Edit Account')),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -74,9 +122,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
                   fontSize: 11,
                   letterSpacing: 1,
                   fontWeight: FontWeight.w700,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
 
@@ -92,9 +138,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
                   fontSize: 11,
                   letterSpacing: 1,
                   fontWeight: FontWeight.w700,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
 
@@ -104,9 +148,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
                 controller: _nameController,
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerLow,
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
@@ -122,9 +164,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
                   fontSize: 11,
                   letterSpacing: 1,
                   fontWeight: FontWeight.w700,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
 
@@ -142,9 +182,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
                   fontSize: 11,
                   letterSpacing: 1,
                   fontWeight: FontWeight.w700,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
 
@@ -158,9 +196,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
                 decoration: InputDecoration(
                   prefixText: 'RM ',
                   filled: true,
-                  fillColor: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerLow,
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
@@ -176,9 +212,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
                     fontSize: 11,
                     letterSpacing: 1,
                     fontWeight: FontWeight.w700,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
 
@@ -210,9 +244,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
                     fontSize: 11,
                     letterSpacing: 1,
                     fontWeight: FontWeight.w700,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
 
@@ -222,9 +254,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
                   controller: _statementCycleController,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    prefixIcon: const Icon(
-                      Icons.calendar_month_rounded,
-                    ),
+                    prefixIcon: const Icon(Icons.calendar_month_rounded),
                     filled: true,
                     fillColor: Theme.of(context)
                         .colorScheme
@@ -235,114 +265,90 @@ class _EditAccountPageState extends State<EditAccountPage> {
                     ),
                   ),
                 ),
-                ], // ← Credit Card conditional 到这里结束
+              ], // ← Credit Card conditional 到这里结束
 
-                const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: _isPrimaryAccount,
-                  onChanged: (value) {
-                    setState(() {
-                      _isPrimaryAccount = value;
-                    });
-                  },
-                  title: const Text(
-                    'Set as Primary Account',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  subtitle: const Text(
-                    'Use this account as the default for new transactions.',
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _isPrimaryAccount,
+                onChanged: (value) {
+                  setState(() {
+                    _isPrimaryAccount = value;
+                  });
+                },
+                title: const Text(
+                  'Set as Primary Account',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Use this account as the default for new transactions.',
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _saveChanges,
+                  icon: const Icon(Icons.check_rounded),
+                  label: const Text('Save Changes'),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant
+                        .withValues(alpha: 0.4),
                   ),
                 ),
-
-                const SizedBox(height: 24),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Changes are valid. Local database will be connected next.',
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(
-                      Icons.check_rounded,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Archive Account',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                    label: const Text(
-                      'Save Changes',
+
+                    const SizedBox(height: 6),
+
+                    Text(
+                      'Hide this account from active balances and transaction selectors while keeping its history.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
+
+                    const SizedBox(height: 12),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          _confirmArchive();
+                        },
+                        icon: const Icon(Icons.archive_outlined),
+                        label: const Text('Archive Account'),
+                      ),
+                    ),
+                  ],
                 ),
+              ),
 
-                const SizedBox(height: 20),
-
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerLowest,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .outlineVariant
-                          .withValues(alpha: 0.4),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Archive Account',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-
-                      const SizedBox(height: 6),
-
-                      Text(
-                        'Hide this account from active balances and transaction selectors while keeping its history.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant,
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            _confirmArchive();
-                          },
-                          icon: const Icon(
-                            Icons.archive_outlined,
-                          ),
-                          label: const Text(
-                            'Archive Account',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-              ],
+              const SizedBox(height: 24),
+            ],
           ),
         ),
       ),
@@ -381,13 +387,12 @@ class _EditAccountPageState extends State<EditAccountPage> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Archive will be connected to the local database next.',
-        ),
-      ),
+    final archivedAccount = widget.account.copyWith(
+      isActive: false,
+      isPrimary: false,
     );
+
+    Navigator.of(context).pop(archivedAccount);
   }
 
   Widget _buildLockedCurrency(BuildContext context) {
@@ -395,10 +400,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 14,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
@@ -406,10 +408,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 7,
-              vertical: 4,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
             decoration: BoxDecoration(
               color: colors.error,
               borderRadius: BorderRadius.circular(5),
@@ -478,29 +477,21 @@ class _EditAccountPageState extends State<EditAccountPage> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 14,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
-          Icon(
-            _accountTypeIcon(widget.account.type),
-            color: colors.primary,
-          ),
+          Icon(_accountTypeIcon(widget.account.type), color: colors.primary),
 
           const SizedBox(width: 12),
 
           Expanded(
             child: Text(
               _accountTypeName(widget.account.type),
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
 

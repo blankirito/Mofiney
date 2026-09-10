@@ -10,6 +10,8 @@ import '../../features/transactions/presentation/scan_receipt_page.dart';
 import '../../features/accounts/presentation/accounts_page.dart';
 import '../../features/profile/presentation/profile_page.dart';
 
+import '../app_dependencies.dart';
+
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
@@ -20,10 +22,13 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = const [
+  final List<Widget> _pages = [
     HomePage(),
-    TransactionsPage(),
-    AccountsPage(),
+    TransactionsPage(repository: transactionRepository),
+    AccountsPage(
+      repository: accountRepository,
+      transactionRepository: transactionRepository,
+    ),
     ProfilePage(),
   ];
 
@@ -41,9 +46,7 @@ class _MainShellState extends State<MainShell> {
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
       barrierColor: Colors.black.withValues(alpha: 0.35),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(28),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (sheetContext) {
         return QuickAddSheet(
@@ -52,36 +55,30 @@ class _MainShellState extends State<MainShell> {
 
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => const AddExpensePage(),
+                builder: (_) =>
+                    AddExpensePage(repository: transactionRepository),
               ),
             );
           },
           onAddIncome: () {
             Navigator.pop(sheetContext);
 
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const AddIncomePage(),
-              ),
-            );
+            Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const AddIncomePage()));
           },
           onTransfer: () {
-          Navigator.pop(sheetContext);
+            Navigator.pop(sheetContext);
 
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const AddTransferPage(),
-            ),
-          );
-        },
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const AddTransferPage()));
+          },
           onScanReceipt: () {
             Navigator.pop(sheetContext);
 
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const ScanReceiptPage(),
-              ),
-            );
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const ScanReceiptPage()));
           },
         );
       },
@@ -93,21 +90,14 @@ class _MainShellState extends State<MainShell> {
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
           height: 76,
           decoration: BoxDecoration(
             color: Theme.of(context).scaffoldBackgroundColor,
-            border: Border(
-              top: BorderSide(
-                color: colors.outlineVariant,
-              ),
-            ),
+            border: Border(top: BorderSide(color: colors.outlineVariant)),
           ),
           child: Row(
             children: [
@@ -130,11 +120,7 @@ class _MainShellState extends State<MainShell> {
                 ),
               ),
 
-              Expanded(
-                child: _AddNavItem(
-                  onTap: _showQuickAddSheet,
-                ),
-              ),
+              Expanded(child: _AddNavItem(onTap: _showQuickAddSheet)),
 
               Expanded(
                 child: _NavItem(
@@ -163,20 +149,14 @@ class _MainShellState extends State<MainShell> {
 }
 
 class _PlaceholderPage extends StatelessWidget {
-  const _PlaceholderPage({
-    required this.title,
-  });
+  const _PlaceholderPage({required this.title});
 
   final String title;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: Text(title),
-        ),
-      ),
+      body: SafeArea(child: Center(child: Text(title))),
     );
   }
 }
@@ -210,9 +190,7 @@ class _NavItem extends StatelessWidget {
             Icon(
               selected ? selectedIcon : icon,
               size: 24,
-              color: selected
-                  ? colors.primary
-                  : colors.onSurfaceVariant,
+              color: selected ? colors.primary : colors.onSurfaceVariant,
             ),
 
             const SizedBox(height: 3),
@@ -221,11 +199,8 @@ class _NavItem extends StatelessWidget {
               label,
               style: TextStyle(
                 fontSize: 10,
-                fontWeight:
-                    selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected
-                    ? colors.primary
-                    : colors.onSurfaceVariant,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected ? colors.primary : colors.onSurfaceVariant,
               ),
             ),
           ],
@@ -236,9 +211,7 @@ class _NavItem extends StatelessWidget {
 }
 
 class _AddNavItem extends StatelessWidget {
-  const _AddNavItem({
-    required this.onTap,
-  });
+  const _AddNavItem({required this.onTap});
 
   final VoidCallback onTap;
 

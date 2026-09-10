@@ -4,23 +4,26 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 
+import '../../../core/app_dependencies.dart';
+import '../../../core/utils/money_input_parser.dart';
 import '../domain/transaction.dart';
 
+import 'dart:async';
+
+import '../../accounts/domain/account.dart';
+import '../../categories/domain/category.dart';
+import '../../../core/currency/currency_catalog.dart';
+
 class EditTransactionPage extends StatefulWidget {
-  const EditTransactionPage({
-    super.key,
-    required this.transaction,
-  });
+  const EditTransactionPage({super.key, required this.transaction});
 
   final Transaction transaction;
 
   @override
-  State<EditTransactionPage> createState() =>
-      _EditTransactionPageState();
+  State<EditTransactionPage> createState() => _EditTransactionPageState();
 }
 
-class _EditTransactionPageState
-    extends State<EditTransactionPage> {
+class _EditTransactionPageState extends State<EditTransactionPage> {
   late final TextEditingController _amountController;
   late final TextEditingController _titleController;
   late final TextEditingController _noteController;
@@ -36,25 +39,12 @@ class _EditTransactionPageState
 
   late DateTime _selectedDateTime;
 
-  static const List<String> _expenseCategories = [
-    'Food & Dining',
-    'Transportation',
-    'Groceries',
-    'Shopping',
-    'Bills & Utilities',
-    'Entertainment',
-    'Health',
-    'Other Expenses',
-  ];
+  List<Account> _accounts = [];
+  List<Category> _categories = [];
 
-  static const List<String> _incomeCategories = [
-    'Income',
-    'Salary',
-    'Bonus',
-    'Freelance',
-    'Investment',
-    'Other Income',
-  ];
+  StreamSubscription<List<Account>>? _accountsSubscription;
+
+  StreamSubscription<List<Category>>? _categoriesSubscription;
 
   static const List<String> _paymentMethods = [
     'Card',
@@ -66,27 +56,15 @@ class _EditTransactionPageState
     'Manual',
   ];
 
-  static const List<({String id, String name})> _accounts = [
-    (id: 'maybank', name: 'Maybank'),
-    (id: 'cimb', name: 'CIMB'),
-    (id: 'tng', name: "Touch 'n Go"),
-    (id: 'cash', name: 'Cash'),
-    (id: 'cimb-visa', name: 'Credit Card'),
-  ];
-
   @override
   void initState() {
     super.initState();
 
     _amountController = TextEditingController(
-      text: widget.transaction.amount
-          .abs()
-          .toStringAsFixed(2),
+      text: widget.transaction.amount.abs().toStringAsFixed(2),
     );
 
-    _titleController = TextEditingController(
-      text: widget.transaction.title,
-    );
+    _titleController = TextEditingController(text: widget.transaction.title);
 
     _noteController = TextEditingController(
       text: widget.transaction.note ?? '',
@@ -101,20 +79,63 @@ class _EditTransactionPageState
     _selectedAccountId = widget.transaction.accountId;
     _selectedAccount = widget.transaction.account;
 
-    _selectedPaymentMethod =
-        widget.transaction.paymentMethod;
+    _selectedPaymentMethod = widget.transaction.paymentMethod;
 
-    _selectedDestinationAccountId =
-        widget.transaction.destinationAccountId;
+    _selectedDestinationAccountId = widget.transaction.destinationAccountId;
 
-    _selectedDestinationAccount =
-        widget.transaction.destinationAccount;
+    _selectedDestinationAccount = widget.transaction.destinationAccount;
 
     _selectedDateTime = widget.transaction.dateTime;
+
+    _watchAccounts();
+    _watchCategories();
+  }
+
+  void _watchCategories() {
+    _categoriesSubscription?.cancel();
+
+    _categoriesSubscription = categoryRepository.watchAllCategories().listen(
+      (categories) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _categories = categories
+              .where((category) => category.isActive)
+              .toList();
+        });
+      },
+      onError: (Object error) {
+        debugPrint('Failed to watch edit transaction categories: $error');
+      },
+    );
+  }
+
+  void _watchAccounts() {
+    _accountsSubscription?.cancel();
+
+    _accountsSubscription = accountRepository.watchAllAccounts().listen(
+      (accounts) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _accounts = accounts.where((account) => account.isActive).toList();
+        });
+      },
+      onError: (Object error) {
+        debugPrint('Failed to watch edit transaction accounts: $error');
+      },
+    );
   }
 
   @override
   void dispose() {
+    _accountsSubscription?.cancel();
+    _categoriesSubscription?.cancel();
+
     _amountController.dispose();
     _titleController.dispose();
     _noteController.dispose();
@@ -126,9 +147,7 @@ class _EditTransactionPageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit Transaction'),
-      ),
+      appBar: AppBar(title: const Text('Edit Transaction')),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -173,12 +192,8 @@ class _EditTransactionPageState
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: _saveChanges,
-                  icon: const Icon(
-                    Icons.check_rounded,
-                  ),
-                  label: const Text(
-                    'Save Changes',
-                  ),
+                  icon: const Icon(Icons.check_rounded),
+                  label: const Text('Save Changes'),
                 ),
               ),
             ],
@@ -189,51 +204,66 @@ class _EditTransactionPageState
   }
 
   void _showValidationMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _saveChanges() {
+  Future<void> _saveChanges() async {
     final title = _titleController.text.trim();
-    final amount = double.tryParse(
-      _amountController.text.trim(),
-    );
 
-    // Title validation
+    final amount = MoneyInputParser.parse(_amountController.text);
+
     if (title.isEmpty) {
-      _showValidationMessage(
-        'Please enter a transaction title.',
-      );
+      _showValidationMessage('Please enter a transaction title.');
       return;
     }
 
-    // Amount validation
     if (amount == null || amount <= 0) {
-      _showValidationMessage(
-        'Please enter a valid amount greater than 0.',
-      );
+      _showValidationMessage('Please enter a valid amount greater than 0.');
       return;
     }
 
-    // Transfer validation
-    if (widget.transaction.type ==
-        TransactionType.transfer) {
+    // Find the selected source / receiving account first.
+    Account? selectedAccount;
+
+    for (final account in _accounts) {
+      if (account.id == _selectedAccountId) {
+        selectedAccount = account;
+        break;
+      }
+    }
+
+    if (selectedAccount == null) {
+      _showValidationMessage('Please select a valid account.');
+      return;
+    }
+
+    // Transfer-specific validation.
+    Account? destinationAccount;
+
+    if (widget.transaction.type == TransactionType.transfer) {
       if (_selectedDestinationAccountId == null ||
           _selectedDestinationAccount == null) {
+        _showValidationMessage('Please select a destination account.');
+        return;
+      }
+
+      if (_selectedAccountId == _selectedDestinationAccountId) {
         _showValidationMessage(
-          'Please select a destination account.',
+          'Source and destination accounts must be different.',
         );
         return;
       }
 
-      if (_selectedAccountId ==
-          _selectedDestinationAccountId) {
-        _showValidationMessage(
-          'Source and destination accounts must be different.',
-        );
+      for (final account in _accounts) {
+        if (account.id == _selectedDestinationAccountId) {
+          destinationAccount = account;
+          break;
+        }
+      }
+
+      if (destinationAccount == null) {
+        _showValidationMessage('Please select a valid destination account.');
         return;
       }
     }
@@ -247,49 +277,79 @@ class _EditTransactionPageState
         .toSet()
         .toList();
 
+    final transactionCurrency = selectedAccount.currencyCode;
+    final accountAmount = amount;
+    final destinationAccountAmount =
+        widget.transaction.type == TransactionType.transfer ? amount : null;
+
     final updatedTransaction = Transaction(
+      id: widget.transaction.id,
       title: title,
       category: _selectedCategory,
-      accountId: _selectedAccountId,
-      account: _selectedAccount,
+
+      accountId: selectedAccount.id,
+      account: selectedAccount.name,
+
+      // Original user-facing transaction amount.
       amount: amount,
+      currencyCode: transactionCurrency,
+
+      // Amount affecting the selected account ledger.
+      accountAmount: accountAmount,
+
       type: widget.transaction.type,
       dateTime: _selectedDateTime,
-      paymentMethod:
+
+      paymentMethod: widget.transaction.type == TransactionType.transfer
+          ? null
+          : _selectedPaymentMethod,
+
+      destinationAccount: widget.transaction.type == TransactionType.transfer
+          ? destinationAccount!.name
+          : null,
+
+      destinationAccountId: widget.transaction.type == TransactionType.transfer
+          ? destinationAccount!.id
+          : null,
+
+      destinationAccountAmount:
           widget.transaction.type == TransactionType.transfer
-              ? null
-              : _selectedPaymentMethod,
-      destinationAccount:
-          widget.transaction.type == TransactionType.transfer
-              ? _selectedDestinationAccount
-              : null,
-      destinationAccountId:
-          widget.transaction.type == TransactionType.transfer
-              ? _selectedDestinationAccountId
-              : null,
+          ? destinationAccountAmount
+          : null,
+
       note: note.isEmpty ? null : note,
       tags: tags,
+
       receiptPath: widget.transaction.receiptPath,
     );
 
-    Navigator.pop(
-      context,
-      updatedTransaction,
-    );
+    try {
+      await transactionRepository.updateTransaction(updatedTransaction);
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pop(context, updatedTransaction);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      _showValidationMessage('Failed to update transaction: $error');
+    }
   }
 
   String get _formattedSelectedTime {
     final hour = _selectedDateTime.hour == 0
         ? 12
         : _selectedDateTime.hour > 12
-            ? _selectedDateTime.hour - 12
-            : _selectedDateTime.hour;
+        ? _selectedDateTime.hour - 12
+        : _selectedDateTime.hour;
 
-    final minute =
-        _selectedDateTime.minute.toString().padLeft(2, '0');
+    final minute = _selectedDateTime.minute.toString().padLeft(2, '0');
 
-    final period =
-        _selectedDateTime.hour >= 12 ? 'PM' : 'AM';
+    final period = _selectedDateTime.hour >= 12 ? 'PM' : 'AM';
 
     return '$hour:$minute $period';
   }
@@ -318,9 +378,7 @@ class _EditTransactionPageState
   Future<void> _pickTime(BuildContext context) async {
     final pickedTime = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(
-        _selectedDateTime,
-      ),
+      initialTime: TimeOfDay.fromDateTime(_selectedDateTime),
     );
 
     if (pickedTime == null || !mounted) {
@@ -367,10 +425,7 @@ class _EditTransactionPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildLabel(
-          context,
-          'DATE & TIME',
-        ),
+        _buildLabel(context, 'DATE & TIME'),
 
         const SizedBox(height: 8),
 
@@ -387,13 +442,9 @@ class _EditTransactionPageState
                   ),
                   decoration: BoxDecoration(
                     color: colors.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(
-                      AppRadius.lg,
-                    ),
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
                     border: Border.all(
-                      color: colors.outlineVariant.withValues(
-                        alpha: 0.35,
-                      ),
+                      color: colors.outlineVariant.withValues(alpha: 0.35),
                     ),
                   ),
                   child: Row(
@@ -434,13 +485,9 @@ class _EditTransactionPageState
                   ),
                   decoration: BoxDecoration(
                     color: colors.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(
-                      AppRadius.lg,
-                    ),
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
                     border: Border.all(
-                      color: colors.outlineVariant.withValues(
-                        alpha: 0.35,
-                      ),
+                      color: colors.outlineVariant.withValues(alpha: 0.35),
                     ),
                   ),
                   child: Row(
@@ -473,6 +520,10 @@ class _EditTransactionPageState
     );
   }
 
+  String get _transactionCurrencySymbol {
+    return CurrencyCatalog.find(widget.transaction.currencyCode).symbol;
+  }
+
   Widget _buildTransferAccountField(
     BuildContext context, {
     required String label,
@@ -482,28 +533,20 @@ class _EditTransactionPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildLabel(
-          context,
-          label,
-        ),
+        _buildLabel(context, label),
 
         const SizedBox(height: 8),
 
         DropdownButtonFormField<String>(
           initialValue: selectedId,
           isExpanded: true,
-          decoration: _inputDecoration(
-            context,
-            hintText: 'Select account',
-          ),
-          items: _accounts.map(
-            (account) {
-              return DropdownMenuItem(
-                value: account.id,
-                child: Text(account.name),
-              );
-            },
-          ).toList(),
+          decoration: _inputDecoration(context, hintText: 'Select account'),
+          items: _accounts.map((account) {
+            return DropdownMenuItem(
+              value: account.id,
+              child: Text('${account.name} · ${account.currencyCode}'),
+            );
+          }).toList(),
           onChanged: (value) {
             if (value == null) {
               return;
@@ -513,10 +556,7 @@ class _EditTransactionPageState
               (account) => account.id == value,
             );
 
-            onChanged(
-              account.id,
-              account.name,
-            );
+            onChanged(account.id, account.name);
           },
         ),
       ],
@@ -575,10 +615,7 @@ class _EditTransactionPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildLabel(
-          context,
-          'PAYMENT METHOD',
-        ),
+        _buildLabel(context, 'PAYMENT METHOD'),
 
         const SizedBox(height: 8),
 
@@ -589,14 +626,9 @@ class _EditTransactionPageState
             context,
             hintText: 'Select payment method',
           ),
-          items: options.map(
-            (method) {
-              return DropdownMenuItem(
-                value: method,
-                child: Text(method),
-              );
-            },
-          ).toList(),
+          items: options.map((method) {
+            return DropdownMenuItem(value: method, child: Text(method));
+          }).toList(),
           onChanged: (value) {
             setState(() {
               _selectedPaymentMethod = value;
@@ -608,16 +640,11 @@ class _EditTransactionPageState
   }
 
   Widget _buildAccountField(BuildContext context) {
-    final options = [
-      if (!_accounts.any(
-        (account) => account.id == _selectedAccountId,
-      ))
-        (
-          id: _selectedAccountId,
-          name: _selectedAccount,
-        ),
-      ..._accounts,
-    ];
+    final options = <Account>[..._accounts];
+
+    final selectedExists = options.any(
+      (account) => account.id == _selectedAccountId,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -632,17 +659,15 @@ class _EditTransactionPageState
         const SizedBox(height: 8),
 
         DropdownButtonFormField<String>(
-          initialValue: _selectedAccountId,
+          initialValue: selectedExists ? _selectedAccountId : null,
           isExpanded: true,
           decoration: _inputDecoration(context),
-          items: options.map(
-            (account) {
-              return DropdownMenuItem(
-                value: account.id,
-                child: Text(account.name),
-              );
-            },
-          ).toList(),
+          items: options.map((account) {
+            return DropdownMenuItem(
+              value: account.id,
+              child: Text('${account.name} · ${account.currencyCode}'),
+            );
+          }).toList(),
           onChanged: (value) {
             if (value == null) {
               return;
@@ -663,25 +688,25 @@ class _EditTransactionPageState
   }
 
   Widget _buildCategoryField(BuildContext context) {
-    final categories =
-        widget.transaction.type == TransactionType.income
-            ? _incomeCategories
-            : _expenseCategories;
+    final expectedType = widget.transaction.type == TransactionType.income
+        ? CategoryType.income
+        : CategoryType.expense;
 
-    // Protect against an existing category that is not
-    // inside our temporary option list.
-    final options = <String>{
-      _selectedCategory,
-      ...categories,
-    }.toList();
+    final categoryNames = _categories
+        .where((category) => category.type == expectedType)
+        .map((category) => category.name)
+        .toSet();
+
+    // Preserve legacy / archived category
+    // already stored on this transaction.
+    categoryNames.add(_selectedCategory);
+
+    final options = categoryNames.toList()..sort();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildLabel(
-          context,
-          'CATEGORY',
-        ),
+        _buildLabel(context, 'CATEGORY'),
 
         const SizedBox(height: 8),
 
@@ -689,14 +714,9 @@ class _EditTransactionPageState
           initialValue: _selectedCategory,
           isExpanded: true,
           decoration: _inputDecoration(context),
-          items: options.map(
-            (category) {
-              return DropdownMenuItem(
-                value: category,
-                child: Text(category),
-              );
-            },
-          ).toList(),
+          items: options.map((category) {
+            return DropdownMenuItem(value: category, child: Text(category));
+          }).toList(),
           onChanged: (value) {
             if (value == null) {
               return;
@@ -744,55 +764,38 @@ class _EditTransactionPageState
       filled: true,
       fillColor: colors.surfaceContainerLow,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(
-          AppRadius.lg,
-        ),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(
-          AppRadius.lg,
-        ),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         borderSide: BorderSide(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.35,
-          ),
+          color: colors.outlineVariant.withValues(alpha: 0.35),
         ),
       ),
     );
   }
 
-  Widget _buildLabel(
-    BuildContext context,
-    String label,
-  ) {
+  Widget _buildLabel(BuildContext context, String label) {
     return Text(
       label,
       style: AppTextStyles.labelCaps.copyWith(
-        color: Theme.of(context)
-            .colorScheme
-            .onSurfaceVariant,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),
     );
   }
-  
+
   Widget _buildTagsField(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildLabel(
-          context,
-          'TAGS',
-        ),
+        _buildLabel(context, 'TAGS'),
 
         const SizedBox(height: 8),
 
         TextField(
           controller: _tagsController,
-          decoration: _inputDecoration(
-            context,
-            hintText: 'Add tags...',
-          ),
+          decoration: _inputDecoration(context, hintText: 'Add tags...'),
         ),
 
         const SizedBox(height: 6),
@@ -800,9 +803,7 @@ class _EditTransactionPageState
         Text(
           'Separate tags with commas.',
           style: AppTextStyles.bodySmall.copyWith(
-            color: Theme.of(context)
-                .colorScheme
-                .onSurfaceVariant,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
       ],
@@ -813,10 +814,7 @@ class _EditTransactionPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildLabel(
-          context,
-          'NOTES',
-        ),
+        _buildLabel(context, 'NOTES'),
 
         const SizedBox(height: 8),
 
@@ -824,10 +822,7 @@ class _EditTransactionPageState
           controller: _noteController,
           minLines: 3,
           maxLines: 5,
-          decoration: _inputDecoration(
-            context,
-            hintText: 'Add a note...',
-          ),
+          decoration: _inputDecoration(context, hintText: 'Add a note...'),
         ),
       ],
     );
@@ -837,14 +832,10 @@ class _EditTransactionPageState
     final colors = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: AppSpacing.sm,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Divider(
         height: 1,
-        color: colors.outlineVariant.withValues(
-          alpha: 0.45,
-        ),
+        color: colors.outlineVariant.withValues(alpha: 0.45),
       ),
     );
   }
@@ -859,11 +850,7 @@ class _EditTransactionPageState
 
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 20,
-          color: colors.primary,
-        ),
+        Icon(icon, size: 20, color: colors.primary),
 
         const SizedBox(width: 12),
 
@@ -905,15 +892,12 @@ class _EditTransactionPageState
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.45,
-          ),
+          color: colors.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
       child: Column(
         children: [
-          if (widget.transaction.type !=
-              TransactionType.transfer) ...[
+          if (widget.transaction.type != TransactionType.transfer) ...[
             _buildCurrentValue(
               context,
               icon: Icons.category_outlined,
@@ -927,45 +911,35 @@ class _EditTransactionPageState
           _buildCurrentValue(
             context,
             icon: Icons.account_balance_outlined,
-            label: widget.transaction.type ==
-                    TransactionType.transfer
+            label: widget.transaction.type == TransactionType.transfer
                 ? 'Source Account'
-                : widget.transaction.type ==
-                        TransactionType.income
-                    ? 'Received Into'
-                    : 'Account',
+                : widget.transaction.type == TransactionType.income
+                ? 'Received Into'
+                : 'Account',
             value: widget.transaction.account,
           ),
 
-          if (widget.transaction.type ==
-              TransactionType.transfer) ...[
+          if (widget.transaction.type == TransactionType.transfer) ...[
             _detailDivider(context),
 
             _buildCurrentValue(
               context,
-              icon:
-                  Icons.account_balance_wallet_outlined,
+              icon: Icons.account_balance_wallet_outlined,
               label: 'Destination Account',
-              value:
-                  widget.transaction.destinationAccount ??
-                      'Not set',
+              value: widget.transaction.destinationAccount ?? 'Not set',
             ),
           ],
 
-          if (widget.transaction.type !=
-                  TransactionType.transfer &&
+          if (widget.transaction.type != TransactionType.transfer &&
               widget.transaction.paymentMethod != null &&
-              widget.transaction.paymentMethod!
-                  .trim()
-                  .isNotEmpty) ...[
+              widget.transaction.paymentMethod!.trim().isNotEmpty) ...[
             _detailDivider(context),
 
             _buildCurrentValue(
               context,
               icon: Icons.credit_card_outlined,
               label: 'Payment Method',
-              value:
-                  widget.transaction.paymentMethod!,
+              value: widget.transaction.paymentMethod!,
             ),
           ],
         ],
@@ -983,10 +957,7 @@ class _EditTransactionPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildLabel(
-          context,
-          label,
-        ),
+        _buildLabel(context, label),
 
         const SizedBox(height: 8),
 
@@ -1002,21 +973,16 @@ class _EditTransactionPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildLabel(
-          context,
-          'AMOUNT',
-        ),
+        _buildLabel(context, 'AMOUNT'),
 
         const SizedBox(height: 8),
 
         TextField(
           controller: _amountController,
-          keyboardType: const TextInputType.numberWithOptions(
-            decimal: true,
-          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: _inputDecoration(
             context,
-            prefixText: 'RM ',
+            prefixText: '$_transactionCurrencySymbol ',
           ),
         ),
       ],
@@ -1049,29 +1015,20 @@ class _EditTransactionPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildLabel(
-          context,
-          'TRANSACTION TYPE',
-        ),
+        _buildLabel(context, 'TRANSACTION TYPE'),
 
         const SizedBox(height: 8),
 
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 14,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
             color: colors.surfaceContainerLow,
             borderRadius: BorderRadius.circular(AppRadius.lg),
           ),
           child: Row(
             children: [
-              Icon(
-                icon,
-                color: colors.primary,
-              ),
+              Icon(icon, color: colors.primary),
 
               const SizedBox(width: 12),
 
@@ -1096,4 +1053,4 @@ class _EditTransactionPageState
       ],
     );
   }
-}   
+}

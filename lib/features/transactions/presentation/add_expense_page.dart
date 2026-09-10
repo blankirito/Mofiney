@@ -8,14 +8,35 @@ import 'add_income_page.dart';
 import 'transfer_page.dart';
 import 'scan_receipt_page.dart';
 
+import '../data/transaction_repository.dart';
+import '../data/receipt_storage.dart';
+import '../domain/transaction.dart';
+import '../../accounts/domain/account.dart';
+
+import '../../../core/app_dependencies.dart';
+import '../../../core/currency/currency_catalog.dart';
+import '../../../core/utils/money_input_parser.dart';
+
+import 'dart:async';
+
+import '../../categories/domain/category.dart';
+import '../../accounts/domain/account_balance_calculator.dart';
+
 class AddExpensePage extends StatefulWidget {
-  const AddExpensePage({super.key});
+  const AddExpensePage({super.key, required this.repository});
+
+  final TransactionRepository repository;
 
   @override
   State<AddExpensePage> createState() => _AddExpensePageState();
 }
 
 class _AddExpensePageState extends State<AddExpensePage> {
+  static const double _moneyTolerance = 0.000001;
+  double _roundMoney(double value) {
+    return double.parse(value.toStringAsFixed(2));
+  }
+
   final TextEditingController _amountController = TextEditingController();
 
   final TextEditingController _merchantController = TextEditingController();
@@ -31,82 +52,107 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   final TextEditingController _notesController = TextEditingController();
 
-  String _selectedCategory = 'Food & Dining';
+  String? _selectedCategory;
 
   final ImagePicker _imagePicker = ImagePicker();
 
-  XFile? _receiptImage; 
-  
-  final List<Map<String, dynamic>> _categories = [
-    {
-      'label': 'Food & Dining',
-      'icon': Icons.restaurant_rounded,
-    },
-    {
-      'label': 'Transport',
-      'icon': Icons.directions_car_rounded,
-    },
-    {
-      'label': 'Groceries',
-      'icon': Icons.shopping_cart_rounded,
-    },
-    {
-      'label': 'Shopping',
-      'icon': Icons.shopping_bag_rounded,
-    },
-    {
-      'label': 'Bills',
-      'icon': Icons.receipt_long_rounded,
-    },
-    {
-      'label': 'Housing',
-      'icon': Icons.home_rounded,
-    },
-    {
-      'label': 'Health',
-      'icon': Icons.health_and_safety_rounded,
-    },
-    {
-      'label': 'Entertainment',
-      'icon': Icons.movie_rounded,
-    },
-    {
-      'label': 'Travel',
-      'icon': Icons.flight_rounded,
-    },
-    {
-      'label': 'Education',
-      'icon': Icons.school_rounded,
-    },
-    {
-      'label': 'Gifts',
-      'icon': Icons.card_giftcard_rounded,
-    },
-    {
-      'label': 'Subscriptions',
-      'icon': Icons.subscriptions_rounded,
-    },
-    {
-      'label': 'Other',
-      'icon': Icons.category_rounded,
-    },
-  ];
+  XFile? _receiptImage;
 
-List<Map<String, dynamic>> get _quickCategories =>
-    _categories.take(5).toList();
+  List<Category> _categories = [];
 
-  String _selectedAccount = 'Maybank';
+  StreamSubscription<List<Category>>? _categoriesSubscription;
 
-  final List<String> _accounts = [
-    'Maybank',
-    'CIMB',
-    "Touch 'n Go",
-    'Credit Card',
-    'Cash',
-  ];
+  List<Category> get _quickCategories => _categories.take(5).toList();
+
+  List<Account> _accounts = [];
+
+  Account? _selectedAccount;
+
+  bool _isLoadingAccounts = true;
+  String _baseCurrency = 'MYR';
+
+  @override
+  void initState() {
+    super.initState();
+
+    _watchCategories();
+    _loadAccounts();
+    _loadBaseCurrency();
+  }
+
+  Future<void> _loadBaseCurrency() async {
+    await appSettingsRepository.ensureSettingsExist();
+    final settings = await appSettingsRepository.getSettings();
+    if (mounted)
+      setState(() => _baseCurrency = settings?.baseCurrency ?? 'MYR');
+  }
+
+  void _watchCategories() {
+    _categoriesSubscription?.cancel();
+
+    _categoriesSubscription = categoryRepository.watchAllCategories().listen(
+      (categories) {
+        final expenseCategories = categories
+            .where(
+              (category) =>
+                  category.type == CategoryType.expense && category.isActive,
+            )
+            .toList();
+
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _categories = expenseCategories;
+
+          final selectedCategoryStillExists =
+              _selectedCategory != null &&
+              expenseCategories.any(
+                (category) => category.name == _selectedCategory,
+              );
+
+          if (!selectedCategoryStillExists) {
+            _selectedCategory = expenseCategories.isEmpty
+                ? null
+                : expenseCategories.first.name;
+          }
+        });
+      },
+      onError: (Object error) {
+        debugPrint('Failed to watch expense categories: $error');
+      },
+    );
+  }
+
+  Future<void> _loadAccounts() async {
+    final accounts = await accountRepository.getAllAccounts();
+
+    final activeAccounts = accounts
+        .where((account) => account.isActive)
+        .toList();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _accounts = activeAccounts;
+
+      if (activeAccounts.isNotEmpty) {
+        _selectedAccount = activeAccounts.firstWhere(
+          (account) => account.isPrimary,
+          orElse: () => activeAccounts.first,
+        );
+      }
+
+      _isLoadingAccounts = false;
+    });
+  }
 
   @override
   void dispose() {
+    _categoriesSubscription?.cancel();
     _amountController.dispose();
     _merchantController.dispose();
     _notesController.dispose();
@@ -119,45 +165,31 @@ List<Map<String, dynamic>> get _quickCategories =>
       builder: (sheetContext) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              vertical: 12,
-            ),
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListTile(
-                  leading: const Icon(
-                    Icons.camera_alt_outlined,
-                  ),
+                  leading: const Icon(Icons.camera_alt_outlined),
                   title: const Text('Take Photo'),
-                  subtitle: const Text(
-                    'Use camera to capture a receipt',
-                  ),
+                  subtitle: const Text('Use camera to capture a receipt'),
                   onTap: () async {
                     Navigator.pop(sheetContext);
 
-                    await Future.delayed(
-                      const Duration(milliseconds: 200),
-                    );
+                    await Future.delayed(const Duration(milliseconds: 200));
 
                     await _pickReceipt(ImageSource.camera);
                   },
                 ),
 
                 ListTile(
-                  leading: const Icon(
-                    Icons.photo_library_outlined,
-                  ),
+                  leading: const Icon(Icons.photo_library_outlined),
                   title: const Text('Choose from Gallery'),
-                  subtitle: const Text(
-                    'Select an existing receipt image',
-                  ),
+                  subtitle: const Text('Select an existing receipt image'),
                   onTap: () async {
                     Navigator.pop(sheetContext);
 
-                    await Future.delayed(
-                      const Duration(milliseconds: 200),
-                    );
+                    await Future.delayed(const Duration(milliseconds: 200));
 
                     await _pickReceipt(ImageSource.gallery);
                   },
@@ -209,9 +241,7 @@ List<Map<String, dynamic>> get _quickCategories =>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Expense'),
-      ),
+      appBar: AppBar(title: const Text('Add Expense')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -363,9 +393,7 @@ List<Map<String, dynamic>> get _quickCategories =>
                 decoration: BoxDecoration(
                   color: colors.surfaceContainerLowest,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: colors.outlineVariant,
-                  ),
+                  border: Border.all(color: colors.outlineVariant),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -492,15 +520,87 @@ List<Map<String, dynamic>> get _quickCategories =>
     );
   }
 
-  void _saveExpense() {
+  Future<void> _saveExpense() async {
     final amountText = _amountController.text.trim();
-    final amount = double.tryParse(amountText);
+
+    final amount = MoneyInputParser.parse(amountText);
 
     if (amountText.isEmpty || amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        const SnackBar(content: Text('Please enter a valid expense amount.')),
+      );
+      return;
+    }
+
+    final merchant = _merchantController.text.trim();
+
+    if (merchant.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a merchant or payee.')),
+      );
+      return;
+    }
+
+    final selectedAccount = _selectedAccount;
+
+    if (selectedAccount == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an account.')),
+      );
+
+      return;
+    }
+
+    final selectedCategory = _selectedCategory;
+
+    if (selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a category.')),
+      );
+      return;
+    }
+
+    final existingTransactions = await widget.repository.getAllTransactions();
+
+    if (!mounted) {
+      return;
+    }
+
+    final currentBalance = _roundMoney(
+      AccountBalanceCalculator.calculate(selectedAccount, existingTransactions),
+    );
+
+    if (selectedAccount.type == AccountType.creditCard) {
+      final creditLimit = selectedAccount.creditLimit;
+
+      if (creditLimit == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Set a credit limit before using this credit card.'),
+          ),
+        );
+
+        return;
+      }
+
+      final availableCredit = _roundMoney(creditLimit - currentBalance);
+
+      if (amount - availableCredit > _moneyTolerance) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Expense exceeds available credit (RM ${availableCredit.toStringAsFixed(2)}).',
+            ),
+          ),
+        );
+
+        return;
+      }
+    } else if (amount - currentBalance > _moneyTolerance) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
           content: Text(
-            'Please enter a valid expense amount.',
+            'Expense exceeds available balance (RM ${currentBalance.toStringAsFixed(2)}).',
           ),
         ),
       );
@@ -508,23 +608,66 @@ List<Map<String, dynamic>> get _quickCategories =>
       return;
     }
 
-    debugPrint('----- EXPENSE -----');
-    debugPrint('Amount: $amount');
-    debugPrint('Category: $_selectedCategory');
-    debugPrint('Account: $_selectedAccount');
-    debugPrint('Merchant: ${_merchantController.text.trim()}');
-    debugPrint('Date: $_selectedDate');
-    debugPrint('Notes: ${_notesController.text.trim()}');
-    debugPrint('Receipt: ${_receiptImage?.path ?? 'None'}');
-    debugPrint('-------------------');
+    String? savedReceiptPath;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Expense is ready to save.',
-        ),
-      ),
+    if (_receiptImage != null) {
+      try {
+        savedReceiptPath = await ReceiptStorage.save(_receiptImage!.path);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save receipt image: $error')),
+        );
+
+        return;
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final transaction = Transaction(
+      id: 'txn_${DateTime.now().microsecondsSinceEpoch}',
+      title: merchant,
+      category: selectedCategory,
+      accountId: selectedAccount.id,
+      account: selectedAccount.name,
+
+      amount: amount,
+      currencyCode: 'MYR',
+      accountAmount: amount,
+
+      type: TransactionType.expense,
+      dateTime: _selectedDate,
+      paymentMethod: null,
+      note: _notesController.text.trim().isEmpty
+          ? null
+          : _notesController.text.trim(),
+      tags: const [],
+      receiptPath: savedReceiptPath,
     );
+
+    try {
+      await widget.repository.insertTransaction(transaction);
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pop(transaction);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save expense: $error')));
+    }
   }
 
   Widget _buildSaveButton(BuildContext context) {
@@ -532,16 +675,10 @@ List<Map<String, dynamic>> get _quickCategories =>
       width: double.infinity,
       child: FilledButton.icon(
         onPressed: _saveExpense,
-        icon: const Icon(
-          Icons.check_rounded,
-        ),
-        label: const Text(
-          'Save Expense',
-        ),
+        icon: const Icon(Icons.check_rounded),
+        label: const Text('Save Expense'),
         style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(
-            vertical: 16,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 16),
         ),
       ),
     );
@@ -578,9 +715,7 @@ List<Map<String, dynamic>> get _quickCategories =>
             minLines: 1,
             decoration: InputDecoration(
               hintText: 'Add additional details...',
-              prefixIcon: const Icon(
-                Icons.edit_note_outlined,
-              ),
+              prefixIcon: const Icon(Icons.edit_note_outlined),
               filled: true,
               fillColor: colors.surfaceContainerLowest,
               border: OutlineInputBorder(
@@ -597,17 +732,9 @@ List<Map<String, dynamic>> get _quickCategories =>
   String _formatExpenseDate(DateTime date) {
     final now = DateTime.now();
 
-    final today = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    );
+    final today = DateTime(now.year, now.month, now.day);
 
-    final selected = DateTime(
-      date.year,
-      date.month,
-      date.day,
-    );
+    final selected = DateTime(date.year, date.month, date.day);
 
     const months = [
       'Jan',
@@ -706,9 +833,7 @@ List<Map<String, dynamic>> get _quickCategories =>
 
           IconButton(
             onPressed: _pickExpenseDate,
-            icon: const Icon(
-              Icons.edit_calendar_outlined,
-            ),
+            icon: const Icon(Icons.edit_calendar_outlined),
           ),
         ],
       ),
@@ -745,9 +870,7 @@ List<Map<String, dynamic>> get _quickCategories =>
             textInputAction: TextInputAction.next,
             decoration: InputDecoration(
               hintText: 'Merchant name...',
-              prefixIcon: const Icon(
-                Icons.storefront_outlined,
-              ),
+              prefixIcon: const Icon(Icons.storefront_outlined),
               filled: true,
               fillColor: colors.surfaceContainerLowest,
               border: OutlineInputBorder(
@@ -765,10 +888,7 @@ List<Map<String, dynamic>> get _quickCategories =>
             children: [
               Text(
                 'Frequent:',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: colors.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
               ),
 
               ..._frequentMerchants.map(
@@ -820,22 +940,19 @@ List<Map<String, dynamic>> get _quickCategories =>
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Select Account',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
 
               ..._accounts.map(
                 (account) => ListTile(
-                  leading: CircleAvatar(
-                    child: Text(
-                      _accountInitials(account),
-                    ),
+                  title: Text(account.name),
+                  subtitle: Text(
+                    '${account.currencyCode} · transaction uses this currency',
                   ),
-                  title: Text(account),
-                  trailing: _selectedAccount == account
+                  trailing: _selectedAccount?.id == account.id
                       ? const Icon(Icons.check_rounded)
                       : null,
                   onTap: () {
@@ -855,6 +972,19 @@ List<Map<String, dynamic>> get _quickCategories =>
   }
 
   Widget _buildAccountSection(BuildContext context) {
+    if (_isLoadingAccounts) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_accounts.isEmpty) {
+      return const Text('No active accounts available.');
+    }
+
     final colors = Theme.of(context).colorScheme;
 
     return InkWell(
@@ -878,7 +1008,7 @@ List<Map<String, dynamic>> get _quickCategories =>
               ),
               child: Center(
                 child: Text(
-                  _accountInitials(_selectedAccount),
+                  _accountInitials(_selectedAccount?.name ?? ''),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -907,7 +1037,7 @@ List<Map<String, dynamic>> get _quickCategories =>
                   const SizedBox(height: 2),
 
                   Text(
-                    _selectedAccount,
+                    _selectedAccount?.name ?? 'Select account',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -918,10 +1048,7 @@ List<Map<String, dynamic>> get _quickCategories =>
               ),
             ),
 
-            Icon(
-              Icons.unfold_more_rounded,
-              color: colors.onSurfaceVariant,
-            ),
+            Icon(Icons.unfold_more_rounded, color: colors.onSurfaceVariant),
           ],
         ),
       ),
@@ -936,21 +1063,15 @@ List<Map<String, dynamic>> get _quickCategories =>
       builder: (sheetContext) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              16,
-              0,
-              16,
-              24,
-            ),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Select Category',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
 
                 const SizedBox(height: 16),
@@ -965,8 +1086,8 @@ List<Map<String, dynamic>> get _quickCategories =>
                     itemBuilder: (context, index) {
                       final category = _categories[index];
 
-                      final label = category['label'] as String;
-                      final icon = category['icon'] as IconData;
+                      final label = category.name;
+                      final icon = _iconFromCodePoint(category.iconCodePoint);
 
                       final selected = label == _selectedCategory;
 
@@ -974,17 +1095,10 @@ List<Map<String, dynamic>> get _quickCategories =>
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        leading: CircleAvatar(
-                          child: Icon(
-                            icon,
-                            size: 20,
-                          ),
-                        ),
+                        leading: CircleAvatar(child: Icon(icon, size: 20)),
                         title: Text(label),
                         trailing: selected
-                            ? const Icon(
-                                Icons.check_rounded,
-                              )
+                            ? const Icon(Icons.check_rounded)
                             : null,
                         onTap: () {
                           setState(() {
@@ -1008,8 +1122,13 @@ List<Map<String, dynamic>> get _quickCategories =>
   Widget _buildCategorySection(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
+    if (_categories.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     final selectedCategoryData = _categories.firstWhere(
-      (category) => category['label'] == _selectedCategory,
+      (category) => category.name == _selectedCategory,
+      orElse: () => _categories.first,
     );
 
     return Column(
@@ -1031,8 +1150,8 @@ List<Map<String, dynamic>> get _quickCategories =>
           scrollDirection: Axis.horizontal,
           child: Row(
             children: _quickCategories.map((category) {
-              final label = category['label'] as String;
-              final icon = category['icon'] as IconData;
+              final label = category.name;
+              final icon = _iconFromCodePoint(category.iconCodePoint);
 
               final selected = _selectedCategory == label;
 
@@ -1109,7 +1228,7 @@ List<Map<String, dynamic>> get _quickCategories =>
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  selectedCategoryData['icon'] as IconData,
+                  _iconFromCodePoint(selectedCategoryData.iconCodePoint),
                   color: colors.primary,
                   size: 20,
                 ),
@@ -1134,7 +1253,7 @@ List<Map<String, dynamic>> get _quickCategories =>
                     const SizedBox(height: 2),
 
                     Text(
-                      _selectedCategory,
+                      selectedCategoryData.name,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -1146,10 +1265,7 @@ List<Map<String, dynamic>> get _quickCategories =>
               ),
               TextButton.icon(
                 onPressed: _showCategoryPicker,
-                icon: const Icon(
-                  Icons.tune_rounded,
-                  size: 16,
-                ),
+                icon: const Icon(Icons.tune_rounded, size: 16),
                 label: const Text('Change'),
               ),
             ],
@@ -1187,7 +1303,9 @@ List<Map<String, dynamic>> get _quickCategories =>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'RM',
+                CurrencyCatalog.find(
+                  _selectedAccount?.currencyCode ?? _baseCurrency,
+                ).symbol,
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
@@ -1222,4 +1340,20 @@ List<Map<String, dynamic>> get _quickCategories =>
       ),
     );
   }
+}
+
+IconData _iconFromCodePoint(int codePoint) {
+  const icons = [
+    Icons.restaurant_rounded,
+    Icons.directions_car_rounded,
+    Icons.local_grocery_store_outlined,
+    Icons.shopping_bag_outlined,
+    Icons.movie_outlined,
+    Icons.category_outlined,
+  ];
+
+  return icons.firstWhere(
+    (icon) => icon.codePoint == codePoint,
+    orElse: () => Icons.category_outlined,
+  );
 }

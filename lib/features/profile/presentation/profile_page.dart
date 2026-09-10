@@ -12,6 +12,15 @@ import 'appearance_page.dart';
 import 'backup_restore_page.dart';
 import 'export_financial_data_page.dart';
 import 'base_currency_page.dart';
+import 'set_app_lock_pin_page.dart';
+
+import '../../../core/app_dependencies.dart';
+
+import 'dart:async';
+
+import '../../accounts/domain/account.dart';
+import '../../../core/database/app_database.dart';
+import '../../../core/currency/currency_catalog.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -23,6 +32,184 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   bool _notificationsEnabled = true;
   bool _appLockEnabled = false;
+  bool _isDeviceAuthenticationAvailable = false;
+  bool _isDeviceAuthenticationEnabled = false;
+
+  List<Account> _accounts = [];
+
+  StreamSubscription<List<Account>>? _accountsSubscription;
+
+  AppSettingsEntry? _settings;
+
+  StreamSubscription<AppSettingsEntry?>? _settingsSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _watchAccounts();
+    _watchSettings();
+    _loadAppLockStatus();
+    _loadDeviceAuthenticationState();
+  }
+
+  Future<void> _loadAppLockStatus() async {
+    final isEnabled = await appLockService.isLockEnabled();
+
+    if (!mounted) return;
+
+    setState(() {
+      _appLockEnabled = isEnabled;
+    });
+  }
+
+  Future<void> _loadDeviceAuthenticationState() async {
+    final isAvailable = await appLockService.canUseDeviceAuthentication();
+    final isEnabled = await appLockService.isDeviceAuthenticationEnabled();
+
+    if (!mounted) return;
+
+    setState(() {
+      _isDeviceAuthenticationAvailable = isAvailable;
+      _isDeviceAuthenticationEnabled = isEnabled;
+    });
+  }
+
+  Future<void> _handleDeviceAuthenticationChanged(bool enabled) async {
+    if (enabled && !_isDeviceAuthenticationAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Device authentication is not available on this device.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await appLockService.setDeviceAuthenticationEnabled(enabled);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isDeviceAuthenticationEnabled = enabled;
+    });
+  }
+
+  Future<void> _handleAppLockChanged(bool enabled) async {
+    if (enabled) {
+      final didEnable = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const SetAppLockPinPage()),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _appLockEnabled = didEnable == true;
+      });
+
+      if (didEnable == true) {
+        await _loadDeviceAuthenticationState();
+      }
+
+      return;
+    }
+
+    final shouldDisable = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Turn off App Lock?'),
+          content: const Text(
+            'This will remove your saved PIN and device authentication setting.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Turn Off'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDisable != true) return;
+
+    await appLockService.disableAndClear();
+
+    if (!mounted) return;
+
+    setState(() {
+      _appLockEnabled = false;
+      _isDeviceAuthenticationEnabled = false;
+    });
+  }
+
+  void _watchSettings() {
+    _settingsSubscription?.cancel();
+
+    _settingsSubscription = appSettingsRepository.watchSettings().listen(
+      (settings) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _settings = settings;
+        });
+      },
+      onError: (Object error) {
+        debugPrint('Failed to watch profile settings: $error');
+      },
+    );
+  }
+
+  void _watchAccounts() {
+    _accountsSubscription?.cancel();
+
+    _accountsSubscription = accountRepository.watchAllAccounts().listen(
+      (accounts) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _accounts = accounts;
+        });
+      },
+      onError: (Object error) {
+        debugPrint('Failed to watch profile accounts: $error');
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _accountsSubscription?.cancel();
+    _settingsSubscription?.cancel();
+
+    super.dispose();
+  }
+
+  int get _activeAccountCount {
+    return _accounts.where((account) => account.isActive).length;
+  }
+
+  double get _monthlyBudget {
+    return _settings?.monthlyBudget ?? 0;
+  }
+
+  String get _monthlyBudgetLabel {
+    return '$_currencySymbol ${_monthlyBudget.toStringAsFixed(2)}';
+  }
+
+  String get _currencySymbol {
+    return CurrencyCatalog.find(_baseCurrency).symbol;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +242,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     context,
                     icon: Icons.payments_outlined,
                     title: 'Base Currency',
-                    subtitle: 'MYR (RM)',
+                    subtitle: _baseCurrency,
                     onTap: () {
                       Navigator.push(
                         context,
@@ -70,7 +257,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     context,
                     icon: Icons.pie_chart_outline_rounded,
                     title: 'Monthly Target Budget',
-                    subtitle: 'RM 4,000.00',
+                    subtitle: _monthlyBudgetLabel,
                     onTap: () {
                       Navigator.push(
                         context,
@@ -113,7 +300,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const AccountsPage(),
+                          builder: (_) => AccountsPage(
+                            repository: accountRepository,
+                            transactionRepository: transactionRepository,
+                          ),
                         ),
                       );
                     },
@@ -229,12 +419,19 @@ class _ProfilePageState extends State<ProfilePage> {
                     title: 'App Lock',
                     subtitle: 'Biometric / PIN',
                     value: _appLockEnabled,
-                    onChanged: (value) {
-                      setState(() {
-                        _appLockEnabled = value;
-                      });
-                    },
+                    onChanged: _handleAppLockChanged,
                   ),
+                  if (_appLockEnabled) ...[
+                    _divider(context),
+                    _buildSwitchTile(
+                      context,
+                      icon: Icons.fingerprint_rounded,
+                      title: 'Use Device Authentication',
+                      subtitle: 'Fingerprint, Face ID, or Windows Hello',
+                      value: _isDeviceAuthenticationEnabled,
+                      onChanged: _handleDeviceAuthenticationChanged,
+                    ),
+                  ],
                 ],
               ),
 
@@ -253,10 +450,12 @@ class _ProfilePageState extends State<ProfilePage> {
                     );
                   },
                   style: FilledButton.styleFrom(
-                    backgroundColor:
-                        Theme.of(context).colorScheme.errorContainer,
-                    foregroundColor:
-                        Theme.of(context).colorScheme.onErrorContainer,
+                    backgroundColor: Theme.of(context)
+                        .colorScheme
+                        .errorContainer,
+                    foregroundColor: Theme.of(context)
+                        .colorScheme
+                        .onErrorContainer,
                   ),
                   icon: const Icon(Icons.logout_rounded),
                   label: const Text('Log Out'),
@@ -267,6 +466,10 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       ),
     );
+  }
+
+  String get _baseCurrency {
+    return _settings?.baseCurrency ?? 'MYR';
   }
 
   Widget _buildHeader(BuildContext context) {
@@ -302,9 +505,7 @@ class _ProfilePageState extends State<ProfilePage> {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => const ProfileDetailsPage(),
-          ),
+          MaterialPageRoute(builder: (_) => const ProfileDetailsPage()),
         );
       },
       borderRadius: BorderRadius.circular(AppRadius.xl),
@@ -315,9 +516,7 @@ class _ProfilePageState extends State<ProfilePage> {
           color: colors.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(AppRadius.xl),
           border: Border.all(
-            color: colors.outlineVariant.withValues(
-              alpha: 0.4,
-            ),
+            color: colors.outlineVariant.withValues(alpha: 0.4),
           ),
         ),
         child: Column(
@@ -383,12 +582,14 @@ class _ProfilePageState extends State<ProfilePage> {
                 _buildProfilePill(
                   context,
                   icon: Icons.account_balance_wallet_outlined,
-                  label: '5 Accounts',
+                  label: _activeAccountCount == 1
+                      ? '1 Account'
+                      : '$_activeAccountCount Accounts',
                 ),
                 _buildProfilePill(
                   context,
                   icon: Icons.payments_outlined,
-                  label: 'MYR Currency',
+                  label: '$_baseCurrency Currency',
                 ),
               ],
             ),
@@ -406,10 +607,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final colors = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.full),
@@ -417,11 +615,7 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 16,
-            color: colors.primary,
-          ),
+          Icon(icon, size: 16, color: colors.primary),
           const SizedBox(width: 5),
           Text(
             label,
@@ -467,30 +661,27 @@ class _ProfilePageState extends State<ProfilePage> {
               color: colors.outlineVariant.withValues(alpha: 0.4),
             ),
           ),
-          child: Column(
-            children: children,
-          ),
+          child: Column(children: children),
         ),
       ],
     );
   }
 
   Widget _buildSettingTile(
-  BuildContext context, {
-  required IconData icon,
-  required String title,
-  required String subtitle,
-  VoidCallback? onTap,
-}) {
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    VoidCallback? onTap,
+  }) {
     final colors = Theme.of(context).colorScheme;
 
     return InkWell(
-      onTap: onTap ??
+      onTap:
+          onTap ??
           () {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('$title will be implemented later.'),
-              ),
+              SnackBar(content: Text('$title will be implemented later.')),
             );
           },
       child: Padding(
@@ -504,11 +695,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 color: colors.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
-              child: Icon(
-                icon,
-                size: 20,
-                color: colors.primary,
-              ),
+              child: Icon(icon, size: 20, color: colors.primary),
             ),
 
             const SizedBox(width: AppSpacing.sm),
@@ -535,10 +722,7 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             ),
 
-            Icon(
-              Icons.chevron_right_rounded,
-              color: colors.onSurfaceVariant,
-            ),
+            Icon(Icons.chevron_right_rounded, color: colors.onSurfaceVariant),
           ],
         ),
       ),
@@ -566,11 +750,7 @@ class _ProfilePageState extends State<ProfilePage> {
               color: colors.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: colors.primary,
-            ),
+            child: Icon(icon, size: 20, color: colors.primary),
           ),
 
           const SizedBox(width: AppSpacing.sm),
@@ -597,10 +777,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
 
-          Switch(
-            value: value,
-            onChanged: onChanged,
-          ),
+          Switch(value: value, onChanged: onChanged),
         ],
       ),
     );
@@ -608,14 +785,10 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _divider(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       child: Divider(
         height: 1,
-        color: Theme.of(context)
-            .colorScheme
-            .outlineVariant
+        color: Theme.of(context).colorScheme.outlineVariant
             .withValues(alpha: 0.4),
       ),
     );

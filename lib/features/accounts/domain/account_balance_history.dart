@@ -2,10 +2,7 @@ import 'account.dart';
 import '../../transactions/domain/transaction.dart';
 
 class AccountBalancePoint {
-  const AccountBalancePoint({
-    required this.dateTime,
-    required this.balance,
-  });
+  const AccountBalancePoint({required this.dateTime, required this.balance});
 
   final DateTime dateTime;
   final double balance;
@@ -21,10 +18,7 @@ class AccountBalanceHistory {
     final accountTransactions = transactions.where((transaction) {
       return transaction.accountId == account.id ||
           transaction.destinationAccountId == account.id;
-    }).toList()
-      ..sort(
-        (a, b) => a.dateTime.compareTo(b.dateTime),
-      );
+    }).toList()..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
     double balance = account.openingBalance;
 
@@ -67,10 +61,7 @@ class AccountBalanceHistory {
       }
 
       points.add(
-        AccountBalancePoint(
-          dateTime: transaction.dateTime,
-          balance: balance,
-        ),
+        AccountBalancePoint(dateTime: transaction.dateTime, balance: balance),
       );
     }
 

@@ -4,17 +4,142 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 
-class BackupRestorePage extends StatelessWidget {
+import 'package:share_plus/share_plus.dart';
+
+import '../../../core/app_dependencies.dart';
+
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+
+class BackupRestorePage extends StatefulWidget {
   const BackupRestorePage({super.key});
+
+  @override
+  State<BackupRestorePage> createState() => _BackupRestorePageState();
+}
+
+class _BackupRestorePageState extends State<BackupRestorePage> {
+  bool _isCreatingBackup = false;
+  bool _isRestoringBackup = false;
+
+  Future<void> _createBackup() async {
+    if (_isCreatingBackup) return;
+
+    setState(() {
+      _isCreatingBackup = true;
+    });
+
+    try {
+      final file = await localBackupService.createBackup();
+
+      if (!mounted) return;
+
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], text: 'Mofiney local backup'),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not create the backup. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreatingBackup = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickAndRestoreBackup() async {
+    if (_isRestoringBackup) return;
+
+    final pickedFile = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+
+    final path = pickedFile?.path;
+    if (path == null) return;
+
+    setState(() {
+      _isRestoringBackup = true;
+    });
+
+    try {
+      final file = File(path);
+      final preview = await localBackupService.validateBackup(file);
+
+      if (!mounted) return;
+
+      final shouldRestore = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('Restore this backup?'),
+            content: Text(
+              'This backup contains ${preview.accountCount} accounts and '
+              '${preview.transactionCount} transactions.\n\n'
+              'Restoring will permanently replace your current local Mofiney data.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Restore'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldRestore != true) return;
+
+      await localBackupService.restoreBackup(file);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Backup restored successfully.')),
+      );
+    } on FormatException {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('That file is not a supported Mofiney backup.'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not restore the backup. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRestoringBackup = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Backup & Restore'),
-      ),
+      appBar: AppBar(title: const Text('Backup & Restore')),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -32,13 +157,9 @@ class BackupRestorePage extends StatelessWidget {
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
                   color: colors.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(
-                    AppRadius.xl,
-                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.xl),
                   border: Border.all(
-                    color: colors.outlineVariant.withValues(
-                      alpha: 0.4,
-                    ),
+                    color: colors.outlineVariant.withValues(alpha: 0.4),
                   ),
                 ),
                 child: Row(
@@ -48,9 +169,7 @@ class BackupRestorePage extends StatelessWidget {
                       height: 44,
                       decoration: BoxDecoration(
                         color: colors.primaryContainer,
-                        borderRadius: BorderRadius.circular(
-                          AppRadius.md,
-                        ),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
                       child: Icon(
                         Icons.shield_outlined,
@@ -62,8 +181,7 @@ class BackupRestorePage extends StatelessWidget {
 
                     Expanded(
                       child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'Local Backup',
@@ -101,17 +219,8 @@ class BackupRestorePage extends StatelessWidget {
               _BackupActionCard(
                 icon: Icons.backup_outlined,
                 title: 'Create Backup',
-                subtitle:
-                    'Save accounts, transactions, categories, budgets, and settings.',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Backup creation will be connected after Local DB.',
-                      ),
-                    ),
-                  );
-                },
+                subtitle: 'Save accounts, transactions, categories, budgets, and settings.',
+                onTap: _isCreatingBackup ? null : _createBackup,
               ),
 
               const SizedBox(height: AppSpacing.sm),
@@ -121,15 +230,7 @@ class BackupRestorePage extends StatelessWidget {
                 title: 'Restore Backup',
                 subtitle:
                     'Restore Finora data from a previously created backup.',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Backup restore will be connected after Local DB.',
-                      ),
-                    ),
-                  );
-                },
+                onTap: _isRestoringBackup ? null : _pickAndRestoreBackup,
               ),
 
               const SizedBox(height: AppSpacing.lg),
@@ -149,28 +250,20 @@ class BackupRestorePage extends StatelessWidget {
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
                   color: colors.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(
-                    AppRadius.xl,
-                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.xl),
                   border: Border.all(
-                    color: colors.outlineVariant.withValues(
-                      alpha: 0.4,
-                    ),
+                    color: colors.outlineVariant.withValues(alpha: 0.4),
                   ),
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.history_rounded,
-                      color: colors.onSurfaceVariant,
-                    ),
+                    Icon(Icons.history_rounded, color: colors.onSurfaceVariant),
 
                     const SizedBox(width: AppSpacing.sm),
 
                     Expanded(
                       child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'Last Backup',
@@ -200,9 +293,7 @@ class BackupRestorePage extends StatelessWidget {
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 decoration: BoxDecoration(
                   color: colors.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(
-                    AppRadius.md,
-                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,7 +336,7 @@ class _BackupActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -253,21 +344,15 @@ class _BackupActionCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(
-        AppRadius.xl,
-      ),
+      borderRadius: BorderRadius.circular(AppRadius.xl),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: colors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(
-            AppRadius.xl,
-          ),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
           border: Border.all(
-            color: colors.outlineVariant.withValues(
-              alpha: 0.4,
-            ),
+            color: colors.outlineVariant.withValues(alpha: 0.4),
           ),
         ),
         child: Row(
@@ -277,22 +362,16 @@ class _BackupActionCard extends StatelessWidget {
               height: 42,
               decoration: BoxDecoration(
                 color: colors.primaryContainer,
-                borderRadius: BorderRadius.circular(
-                  AppRadius.md,
-                ),
+                borderRadius: BorderRadius.circular(AppRadius.md),
               ),
-              child: Icon(
-                icon,
-                color: colors.onPrimaryContainer,
-              ),
+              child: Icon(icon, color: colors.onPrimaryContainer),
             ),
 
             const SizedBox(width: AppSpacing.sm),
 
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
@@ -312,10 +391,7 @@ class _BackupActionCard extends StatelessWidget {
               ),
             ),
 
-            Icon(
-              Icons.chevron_right_rounded,
-              color: colors.onSurfaceVariant,
-            ),
+            Icon(Icons.chevron_right_rounded, color: colors.onSurfaceVariant),
           ],
         ),
       ),

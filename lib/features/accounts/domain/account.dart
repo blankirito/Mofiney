@@ -1,9 +1,4 @@
-enum AccountType {
-  bank,
-  eWallet,
-  cash,
-  creditCard,
-}
+enum AccountType { bank, eWallet, cash, creditCard }
 
 class Account {
   const Account({
@@ -11,6 +6,7 @@ class Account {
     required this.name,
     required this.type,
     required this.openingBalance,
+    required this.currencyCode,
     this.isPrimary = false,
     this.isActive = true,
     this.creditLimit,
@@ -37,6 +33,8 @@ class Account {
   /// Example: 18 = statement cycle on the 18th.
   final int? statementCycleDay;
 
+  final String currencyCode;
+
   Account copyWith({
     String? id,
     String? name,
@@ -46,6 +44,7 @@ class Account {
     bool? isActive,
     double? creditLimit,
     int? statementCycleDay,
+    String? currencyCode,
   }) {
     return Account(
       id: id ?? this.id,
@@ -55,8 +54,8 @@ class Account {
       isPrimary: isPrimary ?? this.isPrimary,
       isActive: isActive ?? this.isActive,
       creditLimit: creditLimit ?? this.creditLimit,
-      statementCycleDay:
-          statementCycleDay ?? this.statementCycleDay,
+      statementCycleDay: statementCycleDay ?? this.statementCycleDay,
+      currencyCode: currencyCode ?? this.currencyCode,
     );
   }
 }

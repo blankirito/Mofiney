@@ -33,8 +33,9 @@ class OnboardingData {
       currencyCode: currencyCode ?? this.currencyCode,
       currencySymbol: currencySymbol ?? this.currencySymbol,
       currencyName: currencyName ?? this.currencyName,
-      monthlyBudget:
-          clearMonthlyBudget ? null : monthlyBudget ?? this.monthlyBudget,
+      monthlyBudget: clearMonthlyBudget
+          ? null
+          : monthlyBudget ?? this.monthlyBudget,
       accountName: accountName ?? this.accountName,
       accountType: accountType ?? this.accountType,
       openingBalance: openingBalance ?? this.openingBalance,

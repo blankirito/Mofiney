@@ -42,9 +42,7 @@ class QuickAddSheet extends StatelessWidget {
                 height: 4,
                 decoration: BoxDecoration(
                   color: colors.outlineVariant,
-                  borderRadius: BorderRadius.circular(
-                    AppRadius.full,
-                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.full),
                 ),
               ),
             ),
@@ -61,8 +59,7 @@ class QuickAddSheet extends StatelessWidget {
                     children: [
                       Text(
                         'Quick Add',
-                        style:
-                            AppTextStyles.headlineLargeMobile.copyWith(
+                        style: AppTextStyles.headlineLargeMobile.copyWith(
                           color: colors.onSurface,
                           fontWeight: FontWeight.w700,
                         ),
@@ -82,9 +79,7 @@ class QuickAddSheet extends StatelessWidget {
                   onPressed: () {
                     Navigator.pop(context);
                   },
-                  icon: const Icon(
-                    Icons.close_rounded,
-                  ),
+                  icon: const Icon(Icons.close_rounded),
                 ),
               ],
             ),
@@ -99,8 +94,9 @@ class QuickAddSheet extends StatelessWidget {
                     title: 'Add Expense',
                     subtitle: 'Record spending',
                     icon: Icons.arrow_outward_rounded,
-                    backgroundColor:
-                        colors.errorContainer.withValues(alpha: 0.45),
+                    backgroundColor: colors.errorContainer.withValues(
+                      alpha: 0.45,
+                    ),
                     iconColor: colors.error,
                     onTap: onAddExpense,
                   ),
@@ -113,8 +109,7 @@ class QuickAddSheet extends StatelessWidget {
                     title: 'Add Income',
                     subtitle: 'Record money received',
                     icon: Icons.south_west_rounded,
-                    backgroundColor:
-                        colors.tertiaryContainer.withValues(
+                    backgroundColor: colors.tertiaryContainer.withValues(
                       alpha: 0.45,
                     ),
                     iconColor: colors.tertiary,
@@ -134,8 +129,7 @@ class QuickAddSheet extends StatelessWidget {
                     title: 'Transfer',
                     subtitle: 'Between accounts',
                     icon: Icons.swap_horiz_rounded,
-                    backgroundColor:
-                        colors.secondaryContainer.withValues(
+                    backgroundColor: colors.secondaryContainer.withValues(
                       alpha: 0.55,
                     ),
                     iconColor: colors.primary,
@@ -150,8 +144,7 @@ class QuickAddSheet extends StatelessWidget {
                     title: 'Scan Receipt',
                     subtitle: 'Scan and auto-fill',
                     icon: Icons.document_scanner_outlined,
-                    backgroundColor:
-                        colors.primaryContainer.withValues(
+                    backgroundColor: colors.primaryContainer.withValues(
                       alpha: 0.35,
                     ),
                     iconColor: colors.primary,
@@ -215,15 +208,9 @@ class _QuickAddCard extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(
                   color: colors.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(
-                    AppRadius.lg,
-                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
                 ),
-                child: Icon(
-                  icon,
-                  color: iconColor,
-                  size: 23,
-                ),
+                child: Icon(icon, color: iconColor, size: 23),
               ),
 
               const SizedBox(height: AppSpacing.sm),

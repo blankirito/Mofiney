@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../../accounts/data/mock_accounts.dart';
 import '../../accounts/domain/account.dart';
+
+import 'dart:async';
+
+import '../../../core/app_dependencies.dart';
+
+import '../../accounts/presentation/add_account_page.dart';
+import '../../accounts/presentation/edit_account_page.dart';
 
 class AccountsPage extends StatefulWidget {
   const AccountsPage({super.key});
@@ -11,55 +17,64 @@ class AccountsPage extends StatefulWidget {
 }
 
 class _AccountsPageState extends State<AccountsPage> {
-  late List<Account> _accounts;
+  List<Account> _accounts = [];
+
+  StreamSubscription<List<Account>>? _accountsSubscription;
 
   @override
   void initState() {
     super.initState();
 
-    _accounts = List<Account>.from(mockAccounts);
+    _watchAccounts();
+  }
+
+  void _watchAccounts() {
+    _accountsSubscription?.cancel();
+
+    _accountsSubscription = accountRepository.watchAllAccounts().listen(
+      (accounts) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _accounts = accounts;
+        });
+      },
+      onError: (Object error) {
+        debugPrint('Failed to watch accounts: $error');
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _accountsSubscription?.cancel();
+    super.dispose();
   }
 
   List<Account> get _activeAccounts {
-    return _accounts
-        .where((account) => account.isActive)
-        .toList();
+    return _accounts.where((account) => account.isActive).toList();
   }
 
   List<Account> _accountsByType(AccountType type) {
-    return _activeAccounts
-        .where((account) => account.type == type)
-        .toList();
+    return _activeAccounts.where((account) => account.type == type).toList();
   }
 
   double _sumBalance(AccountType type) {
-    return _accountsByType(type).fold(
-      0,
-      (total, account) => total + account.openingBalance,
-    );
+    return _accountsByType(type)
+        .fold(0, (total, account) => total + account.openingBalance);
   }
 
   double get _totalAssets {
     return _activeAccounts
-        .where(
-          (account) =>
-              account.type != AccountType.creditCard,
-        )
-        .fold(
-          0,
-          (total, account) =>
-              total + account.openingBalance,
-        );
+        .where((account) => account.type != AccountType.creditCard)
+        .fold(0, (total, account) => total + account.openingBalance);
   }
 
   double get _totalLiabilities {
-    return _accountsByType(
-      AccountType.creditCard,
-    ).fold(
-      0,
-      (total, account) =>
-          total + account.openingBalance,
-    );
+    return _accountsByType(AccountType.creditCard)
+        .fold(0, (total, account) => total + account.openingBalance);
   }
 
   String _money(double amount) {
@@ -75,12 +90,7 @@ class _AccountsPageState extends State<AccountsPage> {
       body: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            16,
-            12,
-            16,
-            32,
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -162,9 +172,7 @@ class _AccountsPageState extends State<AccountsPage> {
           onPressed: () {
             Navigator.maybePop(context);
           },
-          icon: const Icon(
-            Icons.arrow_back_rounded,
-          ),
+          icon: const Icon(Icons.arrow_back_rounded),
         ),
 
         const SizedBox(width: 4),
@@ -187,10 +195,7 @@ class _AccountsPageState extends State<AccountsPage> {
 
               Text(
                 '${_activeAccounts.length} active tracking vaults',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: colors.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
               ),
             ],
           ),
@@ -200,19 +205,11 @@ class _AccountsPageState extends State<AccountsPage> {
           onPressed: () {
             _showAddAccountPlaceholder();
           },
-          icon: const Icon(
-            Icons.add_rounded,
-            size: 18,
-          ),
-          label: const Text(
-            'Add',
-          ),
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('Add'),
           style: FilledButton.styleFrom(
             minimumSize: const Size(0, 44),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 10,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           ),
         ),
       ],
@@ -239,10 +236,7 @@ class _AccountsPageState extends State<AccountsPage> {
               color: colors.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              Icons.verified_user_outlined,
-              color: colors.primary,
-            ),
+            child: Icon(Icons.verified_user_outlined, color: colors.primary),
           ),
 
           const SizedBox(width: 12),
@@ -291,9 +285,7 @@ class _AccountsPageState extends State<AccountsPage> {
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.45,
-          ),
+          color: colors.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
       child: Column(
@@ -314,10 +306,7 @@ class _AccountsPageState extends State<AccountsPage> {
               const Spacer(),
 
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: colors.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(999),
@@ -426,40 +415,23 @@ class _AccountsPageState extends State<AccountsPage> {
 
         ...accounts.map(
           (account) => Padding(
-            padding: const EdgeInsets.only(
-              bottom: 8,
-            ),
-            child: _buildAccountCard(
-              context,
-              account,
-            ),
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _buildAccountCard(context, account),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildAccountCard(
-    BuildContext context,
-    Account account,
-  ) {
+  Widget _buildAccountCard(BuildContext context, Account account) {
     if (account.type == AccountType.creditCard) {
-      return _buildCreditCard(
-        context,
-        account,
-      );
+      return _buildCreditCard(context, account);
     }
 
-    return _buildStandardAccountCard(
-      context,
-      account,
-    );
+    return _buildStandardAccountCard(context, account);
   }
 
-  Widget _buildStandardAccountCard(
-    BuildContext context,
-    Account account,
-  ) {
+  Widget _buildStandardAccountCard(BuildContext context, Account account) {
     final colors = Theme.of(context).colorScheme;
 
     return Container(
@@ -469,9 +441,7 @@ class _AccountsPageState extends State<AccountsPage> {
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.35,
-          ),
+          color: colors.outlineVariant.withValues(alpha: 0.35),
         ),
       ),
       child: Row(
@@ -483,10 +453,7 @@ class _AccountsPageState extends State<AccountsPage> {
               color: colors.surfaceContainer,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              _iconForAccount(account.type),
-              color: colors.primary,
-            ),
+            child: Icon(_iconForAccount(account.type), color: colors.primary),
           ),
 
           const SizedBox(width: 12),
@@ -552,45 +519,29 @@ class _AccountsPageState extends State<AccountsPage> {
             onPressed: () {
               _editAccount(account);
             },
-            icon: const Icon(
-              Icons.edit_outlined,
-              size: 20,
-            ),
+            icon: const Icon(Icons.edit_outlined, size: 20),
           ),
 
           IconButton(
             onPressed: () {
               _archiveAccount(account);
             },
-            icon: const Icon(
-              Icons.archive_outlined,
-              size: 20,
-            ),
+            icon: const Icon(Icons.archive_outlined, size: 20),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCreditCard(
-    BuildContext context,
-    Account account,
-  ) {
+  Widget _buildCreditCard(BuildContext context, Account account) {
     final colors = Theme.of(context).colorScheme;
 
     final double limit = account.creditLimit ?? 0;
     final double outstanding = account.openingBalance;
 
-    final double available = limit > outstanding
-        ? limit - outstanding
-        : 0;
+    final double available = limit > outstanding ? limit - outstanding : 0;
 
-    final usage = limit <= 0
-        ? 0.0
-        : (outstanding / limit).clamp(
-            0.0,
-            1.0,
-          );
+    final usage = limit <= 0 ? 0.0 : (outstanding / limit).clamp(0.0, 1.0);
 
     return Container(
       width: double.infinity,
@@ -599,9 +550,7 @@ class _AccountsPageState extends State<AccountsPage> {
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: colors.outlineVariant.withValues(
-            alpha: 0.35,
-          ),
+          color: colors.outlineVariant.withValues(alpha: 0.35),
         ),
       ),
       child: Column(
@@ -615,10 +564,7 @@ class _AccountsPageState extends State<AccountsPage> {
                   color: colors.errorContainer,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  Icons.credit_card_rounded,
-                  color: colors.error,
-                ),
+                child: Icon(Icons.credit_card_rounded, color: colors.error),
               ),
 
               const SizedBox(width: 12),
@@ -655,20 +601,14 @@ class _AccountsPageState extends State<AccountsPage> {
                 onPressed: () {
                   _editAccount(account);
                 },
-                icon: const Icon(
-                  Icons.edit_outlined,
-                  size: 20,
-                ),
+                icon: const Icon(Icons.edit_outlined, size: 20),
               ),
 
               IconButton(
                 onPressed: () {
                   _archiveAccount(account);
                 },
-                icon: const Icon(
-                  Icons.archive_outlined,
-                  size: 20,
-                ),
+                icon: const Icon(Icons.archive_outlined, size: 20),
               ),
             ],
           ),
@@ -680,8 +620,7 @@ class _AccountsPageState extends State<AccountsPage> {
             child: LinearProgressIndicator(
               value: usage,
               minHeight: 8,
-              backgroundColor:
-                  colors.surfaceContainer,
+              backgroundColor: colors.surfaceContainer,
               color: colors.error,
             ),
           ),
@@ -735,10 +674,7 @@ class _AccountsPageState extends State<AccountsPage> {
       children: [
         Text(
           title,
-          style: TextStyle(
-            fontSize: 10,
-            color: colors.onSurfaceVariant,
-          ),
+          style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant),
         ),
 
         const SizedBox(height: 2),
@@ -757,23 +693,15 @@ class _AccountsPageState extends State<AccountsPage> {
     );
   }
 
-  Widget _buildAddAccountButton(
-    BuildContext context,
-  ) {
+  Widget _buildAddAccountButton(BuildContext context) {
     return SizedBox(
       width: double.infinity,
       child: FilledButton.icon(
         onPressed: _showAddAccountPlaceholder,
-        icon: const Icon(
-          Icons.add_circle_outline_rounded,
-        ),
-        label: const Text(
-          '+ Add New Account',
-        ),
+        icon: const Icon(Icons.add_circle_outline_rounded),
+        label: const Text('+ Add New Account'),
         style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(
-            vertical: 15,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 15),
         ),
       ),
     );
@@ -795,36 +723,36 @@ class _AccountsPageState extends State<AccountsPage> {
     }
   }
 
-  void _showAddAccountPlaceholder() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Add Account form will be connected next.',
-        ),
-      ),
-    );
+  Future<void> _showAddAccountPlaceholder() async {
+    final newAccount = await Navigator.of(
+      context,
+    ).push<Account>(MaterialPageRoute(builder: (_) => const AddAccountPage()));
+
+    if (newAccount == null) {
+      return;
+    }
+
+    await accountRepository.insertAccount(newAccount);
   }
 
-  void _editAccount(Account account) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Edit ${account.name}',
-        ),
-      ),
+  Future<void> _editAccount(Account account) async {
+    final updatedAccount = await Navigator.of(context).push<Account>(
+      MaterialPageRoute(builder: (_) => EditAccountPage(account: account)),
     );
+
+    if (updatedAccount == null) {
+      return;
+    }
+
+    await accountRepository.updateAccount(updatedAccount);
   }
 
-  Future<void> _archiveAccount(
-    Account account,
-  ) async {
+  Future<void> _archiveAccount(Account account) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text(
-            'Archive account?',
-          ),
+          title: const Text('Archive account?'),
           content: Text(
             'Archive ${account.name}? '
             'Its existing ledger transactions will remain intact.',
@@ -832,26 +760,16 @@ class _AccountsPageState extends State<AccountsPage> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(
-                  dialogContext,
-                  false,
-                );
+                Navigator.pop(dialogContext, false);
               },
-              child: const Text(
-                'Cancel',
-              ),
+              child: const Text('Cancel'),
             ),
 
             FilledButton(
               onPressed: () {
-                Navigator.pop(
-                  dialogContext,
-                  true,
-                );
+                Navigator.pop(dialogContext, true);
               },
-              child: const Text(
-                'Archive',
-              ),
+              child: const Text('Archive'),
             ),
           ],
         );
@@ -862,28 +780,13 @@ class _AccountsPageState extends State<AccountsPage> {
       return;
     }
 
-    setState(() {
-      final index = _accounts.indexWhere(
-        (item) => item.id == account.id,
-      );
-
-      if (index != -1) {
-        _accounts[index] = account.copyWith(
-          isActive: false,
-        );
-      }
-    });
+    await accountRepository.updateAccount(account.copyWith(isActive: false));
 
     if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${account.name} archived.',
-        ),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('${account.name} archived.')));
   }
 }

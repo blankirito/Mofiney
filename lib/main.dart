@@ -1,11 +1,36 @@
 import 'package:flutter/material.dart';
+
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_preferences.dart';
 import 'features/welcome/presentation/welcome_page.dart';
 
-final ValueNotifier<ThemeMode> themeModeNotifier =
-    ValueNotifier(ThemeMode.system);
+import 'features/accounts/data/mock_accounts.dart';
+import 'features/transactions/data/mock_transactions.dart';
+import 'features/categories/data/default_categories.dart';
+import 'features/profile/presentation/app_lock_gate.dart';
 
-void main() {
+import 'core/app_dependencies.dart';
+
+final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier(
+  ThemeMode.system,
+);
+final themePreferences = ThemePreferences();
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  themeModeNotifier.value = await themePreferences.loadThemeMode();
+
+  await accountRepository.seedAccountsIfEmpty(mockAccounts);
+
+  await transactionRepository.seedTransactionsIfEmpty(mockTransactions);
+
+  await appSettingsRepository.ensureSettingsExist();
+
+  await categoryRepository.seedCategoriesIfEmpty(defaultCategories);
+
+  await recurringScheduleRepository.processDueSchedules();
+
   runApp(const MofineyApp());
 }
 
@@ -23,7 +48,7 @@ class MofineyApp extends StatelessWidget {
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: themeMode,
-          home: const WelcomePage(),
+          home: const AppLockGate(child: WelcomePage()),
         );
       },
     );

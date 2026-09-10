@@ -91,23 +91,23 @@ abstract final class AppTheme {
       brightness: colorScheme.brightness,
       colorScheme: colorScheme,
 
-      scaffoldBackgroundColor:
-          colorScheme.brightness == Brightness.light
-              ? AppColors.lightBackground
-              : AppColors.darkBackground,
+      scaffoldBackgroundColor: colorScheme.brightness == Brightness.light
+          ? AppColors.lightBackground
+          : AppColors.darkBackground,
 
       // Default typography
-      textTheme: TextTheme(
-        headlineLarge: AppTextStyles.headlineLarge,
-        headlineMedium: AppTextStyles.headlineMedium,
-        headlineSmall: AppTextStyles.headlineSmall,
-        bodyLarge: AppTextStyles.bodyLarge,
-        bodyMedium: AppTextStyles.bodyMedium,
-        bodySmall: AppTextStyles.bodySmall,
-      ).apply(
-        bodyColor: colorScheme.onSurface,
-        displayColor: colorScheme.onSurface,
-      ),
+      textTheme:
+          TextTheme(
+            headlineLarge: AppTextStyles.headlineLarge,
+            headlineMedium: AppTextStyles.headlineMedium,
+            headlineSmall: AppTextStyles.headlineSmall,
+            bodyLarge: AppTextStyles.bodyLarge,
+            bodyMedium: AppTextStyles.bodyMedium,
+            bodySmall: AppTextStyles.bodySmall,
+          ).apply(
+            bodyColor: colorScheme.onSurface,
+            displayColor: colorScheme.onSurface,
+          ),
 
       // Buttons
       filledButtonTheme: FilledButtonThemeData(
@@ -130,9 +130,7 @@ abstract final class AppTheme {
             : AppColors.darkSurfaceContainer,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          side: BorderSide(
-            color: colorScheme.outlineVariant,
-          ),
+          side: BorderSide(color: colorScheme.outlineVariant),
         ),
       ),
 
@@ -144,22 +142,15 @@ abstract final class AppTheme {
             : AppColors.darkSurfaceDim,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(
-            color: colorScheme.outlineVariant,
-          ),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(
-            color: colorScheme.outlineVariant,
-          ),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide(
-            color: colorScheme.primary,
-            width: 1.5,
-          ),
+          borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
         ),
       ),
 
@@ -169,9 +160,7 @@ abstract final class AppTheme {
             ? AppColors.lightSurfaceContainerLowest
             : AppColors.darkSurface,
         indicatorColor: colorScheme.primaryContainer,
-        labelTextStyle: WidgetStatePropertyAll(
-          AppTextStyles.bodySmall,
-        ),
+        labelTextStyle: WidgetStatePropertyAll(AppTextStyles.bodySmall),
       ),
     );
   }

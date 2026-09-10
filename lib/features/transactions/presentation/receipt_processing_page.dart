@@ -7,18 +7,13 @@ import 'review_receipt_page.dart';
 class ReceiptProcessingPage extends StatefulWidget {
   final String imagePath;
 
-  const ReceiptProcessingPage({
-    super.key,
-    required this.imagePath,
-  });
+  const ReceiptProcessingPage({super.key, required this.imagePath});
 
   @override
-  State<ReceiptProcessingPage> createState() =>
-      _ReceiptProcessingPageState();
+  State<ReceiptProcessingPage> createState() => _ReceiptProcessingPageState();
 }
 
-class _ReceiptProcessingPageState
-    extends State<ReceiptProcessingPage> {
+class _ReceiptProcessingPageState extends State<ReceiptProcessingPage> {
   int _currentStep = 0;
 
   final List<String> _steps = [
@@ -38,9 +33,7 @@ class _ReceiptProcessingPageState
 
   Future<void> _startFakeProcessing() async {
     for (int i = 0; i < _steps.length; i++) {
-      await Future.delayed(
-        const Duration(milliseconds: 900),
-      );
+      await Future.delayed(const Duration(milliseconds: 900));
 
       if (!mounted) {
         return;
@@ -56,17 +49,11 @@ class _ReceiptProcessingPageState
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Receipt processing completed.',
-        ),
-      ),
+      const SnackBar(content: Text('Receipt processing completed.')),
     );
 
     // 让用户看到一下 5/5 + Receipt processed!
-    await Future.delayed(
-      const Duration(milliseconds: 700),
-    );
+    await Future.delayed(const Duration(milliseconds: 700));
 
     if (!mounted) {
       return;
@@ -76,13 +63,11 @@ class _ReceiptProcessingPageState
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => ReviewReceiptPage(
-          imagePath: widget.imagePath,
-        ),
+        builder: (context) => ReviewReceiptPage(imagePath: widget.imagePath),
       ),
     );
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -92,27 +77,18 @@ class _ReceiptProcessingPageState
       appBar: AppBar(
         backgroundColor: colors.surface,
         elevation: 0,
-        title: const Text(
-          'Scan Receipt',
-        ),
+        title: const Text('Scan Receipt'),
         leading: IconButton(
           onPressed: () {
             Navigator.pop(context);
           },
-          icon: const Icon(
-            Icons.close_rounded,
-          ),
+          icon: const Icon(Icons.close_rounded),
         ),
       ),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            16,
-            8,
-            16,
-            32,
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
           child: Column(
             children: [
               _buildReceiptPreview(context),
@@ -150,9 +126,7 @@ class _ReceiptProcessingPageState
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(
-              alpha: 0.04,
-            ),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -167,10 +141,7 @@ class _ReceiptProcessingPageState
             borderRadius: BorderRadius.circular(12),
           ),
           clipBehavior: Clip.antiAlias,
-          child: Image.file(
-            File(widget.imagePath),
-            fit: BoxFit.cover,
-          ),
+          child: Image.file(File(widget.imagePath), fit: BoxFit.cover),
         ),
       ),
     );
@@ -197,9 +168,7 @@ class _ReceiptProcessingPageState
         const SizedBox(height: 8),
 
         Text(
-          _currentStep >= _steps.length
-              ? 'Your receipt is ready for review.'
-              : 'Mofiney is extracting line items, merchant details and totals.',
+          _currentStep >= _steps.length ? 'Your receipt is ready for review.' : 'Mofiney is extracting line items, merchant details and totals.',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 14,
@@ -222,9 +191,7 @@ class _ReceiptProcessingPageState
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(
-              alpha: 0.04,
-            ),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -233,8 +200,7 @@ class _ReceiptProcessingPageState
       child: Column(
         children: [
           Row(
-            mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'EXTRACTION PROGRESS',
@@ -253,16 +219,14 @@ class _ReceiptProcessingPageState
                 ),
                 decoration: BoxDecoration(
                   color: colors.primaryFixed,
-                  borderRadius:
-                      BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   '$_currentStep of ${_steps.length} done',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color:
-                        colors.onPrimaryFixedVariant,
+                    color: colors.onPrimaryFixedVariant,
                   ),
                 ),
               ),
@@ -272,14 +236,9 @@ class _ReceiptProcessingPageState
           const SizedBox(height: 18),
 
           for (int i = 0; i < _steps.length; i++) ...[
-            _buildProgressStep(
-              context,
-              index: i,
-              label: _steps[i],
-            ),
+            _buildProgressStep(context, index: i, label: _steps[i]),
 
-            if (i != _steps.length - 1)
-              _buildConnector(context, i),
+            if (i != _steps.length - 1) _buildConnector(context, i),
           ],
         ],
       ),
@@ -295,38 +254,27 @@ class _ReceiptProcessingPageState
 
     final bool completed = index < _currentStep;
 
-    final bool active =
-        index == _currentStep &&
-        _currentStep < _steps.length;
+    final bool active = index == _currentStep && _currentStep < _steps.length;
 
     return AnimatedContainer(
-      duration: const Duration(
-        milliseconds: 250,
-      ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 8,
-      ),
+      duration: const Duration(milliseconds: 250),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
-        color: active
-            ? colors.surfaceContainerLow
-            : Colors.transparent,
+        color: active ? colors.surfaceContainerLow : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
           AnimatedContainer(
-            duration: const Duration(
-              milliseconds: 250,
-            ),
+            duration: const Duration(milliseconds: 250),
             width: 30,
             height: 30,
             decoration: BoxDecoration(
               color: completed
                   ? colors.primaryContainer
                   : active
-                      ? colors.primary
-                      : colors.surfaceContainer,
+                  ? colors.primary
+                  : colors.surfaceContainer,
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -334,28 +282,25 @@ class _ReceiptProcessingPageState
                   ? Icon(
                       Icons.check_rounded,
                       size: 17,
-                      color:
-                          colors.onPrimaryContainer,
+                      color: colors.onPrimaryContainer,
                     )
                   : active
-                      ? SizedBox(
-                          width: 15,
-                          height: 15,
-                          child:
-                              CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colors.onPrimary,
-                          ),
-                        )
-                      : Container(
-                          width: 7,
-                          height: 7,
-                          decoration: BoxDecoration(
-                            color:
-                                colors.onSurfaceVariant,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
+                  ? SizedBox(
+                      width: 15,
+                      height: 15,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: colors.onPrimary,
+                      ),
+                    )
+                  : Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: colors.onSurfaceVariant,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
             ),
           ),
 
@@ -366,9 +311,7 @@ class _ReceiptProcessingPageState
               label,
               style: TextStyle(
                 fontSize: active ? 16 : 14,
-                fontWeight: active
-                    ? FontWeight.w600
-                    : FontWeight.w500,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                 color: completed || active
                     ? colors.onSurface
                     : colors.onSurfaceVariant,
@@ -387,15 +330,10 @@ class _ReceiptProcessingPageState
             )
           else if (active)
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 9,
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
               decoration: BoxDecoration(
-                color:
-                    colors.surfaceContainerHighest,
-                borderRadius:
-                    BorderRadius.circular(999),
+                color: colors.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
                 'Processing',
@@ -409,31 +347,22 @@ class _ReceiptProcessingPageState
           else
             Text(
               'Pending',
-              style: TextStyle(
-                fontSize: 12,
-                color: colors.onSurfaceVariant,
-              ),
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildConnector(
-    BuildContext context,
-    int index,
-  ) {
+  Widget _buildConnector(BuildContext context, int index) {
     final colors = Theme.of(context).colorScheme;
 
-    final bool completed =
-        index < _currentStep - 1;
+    final bool completed = index < _currentStep - 1;
 
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(
-          left: 22,
-        ),
+        margin: const EdgeInsets.only(left: 22),
         width: 2,
         height: 10,
         color: completed
@@ -454,8 +383,7 @@ class _ReceiptProcessingPageState
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 34,
@@ -475,8 +403,7 @@ class _ReceiptProcessingPageState
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'HELPFUL TIP',
@@ -484,8 +411,7 @@ class _ReceiptProcessingPageState
                     fontSize: 11,
                     letterSpacing: 0.8,
                     fontWeight: FontWeight.w600,
-                    color:
-                        colors.onSecondaryContainer,
+                    color: colors.onSecondaryContainer,
                   ),
                 ),
 
@@ -496,8 +422,7 @@ class _ReceiptProcessingPageState
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.5,
-                    color:
-                        colors.onSurfaceVariant,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -508,9 +433,7 @@ class _ReceiptProcessingPageState
     );
   }
 
-  Widget _buildSecurityFooter(
-    BuildContext context,
-  ) {
+  Widget _buildSecurityFooter(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return Row(
@@ -526,10 +449,7 @@ class _ReceiptProcessingPageState
 
         Text(
           'Secure on-device receipt processing',
-          style: TextStyle(
-            fontSize: 12,
-            color: colors.onSurfaceVariant,
-          ),
+          style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
         ),
       ],
     );

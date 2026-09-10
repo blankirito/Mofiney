@@ -4,13 +4,22 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 
-import '../data/mock_transactions.dart';
 import '../domain/transaction.dart';
 
 import 'transaction_detail_page.dart';
 
+import '../data/transaction_repository.dart';
+
+import 'dart:async';
+
+import '../../../core/app_dependencies.dart';
+import '../../../core/database/app_database.dart';
+import '../../../core/currency/currency_catalog.dart';
+
 class TransactionsPage extends StatefulWidget {
-  const TransactionsPage({super.key});
+  const TransactionsPage({super.key, required this.repository});
+
+  final TransactionRepository repository;
 
   @override
   State<TransactionsPage> createState() => _TransactionsPageState();
@@ -31,15 +40,116 @@ class _TransactionsPageState extends State<TransactionsPage> {
   DateTime? _startDate;
   DateTime? _endDate;
 
+  List<Transaction> _transactions = [];
+
+  bool _isLoading = true;
+
+  String? _errorMessage;
+
+  StreamSubscription<List<Transaction>>? _transactionsSubscription;
+  StreamSubscription<AppSettingsEntry?>? _settingsSubscription;
+  String _baseCurrency = 'MYR';
+
+  @override
+  void initState() {
+    super.initState();
+
+    _watchTransactions();
+    _settingsSubscription = appSettingsRepository.watchSettings().listen((
+      settings,
+    ) {
+      if (mounted && settings != null) {
+        setState(() {
+          _baseCurrency = settings.baseCurrency;
+        });
+      }
+    });
+  }
+
+  void _watchTransactions() {
+    _transactionsSubscription?.cancel();
+
+    _transactionsSubscription = widget.repository.watchAllTransactions().listen(
+      (transactions) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _transactions = transactions;
+          _isLoading = false;
+          _errorMessage = null;
+        });
+      },
+      onError: (Object error) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _isLoading = false;
+          _errorMessage = error.toString();
+        });
+      },
+    );
+  }
+
+  double _convertedAmount(Transaction transaction) {
+    return transaction.amount;
+  }
+
+  String get _currencySymbol => CurrencyCatalog.find(_baseCurrency).symbol;
+
   @override
   void dispose() {
+    _transactionsSubscription?.cancel();
+    _settingsSubscription?.cancel();
     _searchController.dispose();
+
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_errorMessage != null) {
+      return Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline_rounded, size: 40),
+                  const SizedBox(height: 12),
+                  const Text('Failed to load transactions'),
+                  const SizedBox(height: 8),
+                  Text(_errorMessage!, textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () {
+                      setState(() {
+                        _isLoading = true;
+                        _errorMessage = null;
+                      });
+
+                      _watchTransactions();
+                    },
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -298,14 +408,14 @@ class _TransactionsPageState extends State<TransactionsPage> {
     }
 
     if (_minAmount != null && _maxAmount != null) {
-      return 'RM ${_minAmount!.toStringAsFixed(0)} - RM ${_maxAmount!.toStringAsFixed(0)}';
+      return '$_currencySymbol ${_minAmount!.toStringAsFixed(0)} - $_currencySymbol ${_maxAmount!.toStringAsFixed(0)}';
     }
 
     if (_minAmount != null) {
-      return '≥ RM ${_minAmount!.toStringAsFixed(0)}';
+      return '≥ $_currencySymbol ${_minAmount!.toStringAsFixed(0)}';
     }
 
-    return '≤ RM ${_maxAmount!.toStringAsFixed(0)}';
+    return '≤ $_currencySymbol ${_maxAmount!.toStringAsFixed(0)}';
   }
 
   void _applyThisMonth() {
@@ -467,9 +577,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Minimum',
-                              prefixText: 'RM ',
+                              prefixText: '$_currencySymbol ',
                             ),
                           ),
                         ),
@@ -482,9 +592,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Maximum',
-                              prefixText: 'RM ',
+                              prefixText: '$_currencySymbol ',
                             ),
                           ),
                         ),
@@ -584,7 +694,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   void _showAccountFilter(BuildContext context) {
     final accounts =
-        mockTransactions
+        _transactions
             .expand(
               (transaction) => [
                 transaction.account,
@@ -638,7 +748,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   void _showCategoryFilter(BuildContext context) {
     final categories =
-        mockTransactions
+        _transactions
             .map((transaction) => transaction.category)
             .toSet()
             .toList()
@@ -786,13 +896,15 @@ class _TransactionsPageState extends State<TransactionsPage> {
     double totalOut = 0;
 
     for (final transaction in transactions) {
+      final amount = _convertedAmount(transaction).abs();
+
       switch (transaction.type) {
         case TransactionType.income:
-          totalIn += transaction.amount.abs();
+          totalIn += amount;
           break;
 
         case TransactionType.expense:
-          totalOut += transaction.amount.abs();
+          totalOut += amount;
           break;
 
         case TransactionType.transfer:
@@ -852,6 +964,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                   amount: totalIn,
                   prefix: '+',
                   color: colors.tertiary,
+                  currencySymbol: _currencySymbol,
                 ),
               ),
               Expanded(
@@ -860,6 +973,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                   amount: totalOut,
                   prefix: '-',
                   color: colors.error,
+                  currencySymbol: _currencySymbol,
                 ),
               ),
               Expanded(
@@ -868,6 +982,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                   amount: netBalance.abs(),
                   prefix: netBalance >= 0 ? '+' : '-',
                   color: netBalance >= 0 ? colors.primary : colors.error,
+                  currencySymbol: _currencySymbol,
                 ),
               ),
             ],
@@ -905,7 +1020,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
   }
 
   List<Transaction> _getFilteredTransactions() {
-    return mockTransactions.where((transaction) {
+    return _transactions.where((transaction) {
       final matchesType =
           _selectedType == null || transaction.type == _selectedType;
 
@@ -974,6 +1089,10 @@ class _TransactionsPageState extends State<TransactionsPage> {
       groups[date]!.add(transaction);
     }
 
+    for (final transactions in groups.values) {
+      transactions.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    }
+
     final sortedEntries = groups.entries.toList()
       ..sort((a, b) => b.key.compareTo(a.key));
 
@@ -1014,6 +1133,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
                 child: _TransactionGroup(
                   date: entry.key,
                   transactions: entry.value,
+                  repository: widget.repository,
+                  currencySymbol: _currencySymbol,
+                  convertedAmount: _convertedAmount,
                 ),
               );
             }).toList(),
@@ -1133,9 +1255,17 @@ class _FilterChipButton extends StatelessWidget {
 }
 
 class _TransactionRow extends StatelessWidget {
-  const _TransactionRow({required this.transaction});
+  const _TransactionRow({
+    required this.transaction,
+    required this.repository,
+    required this.currencySymbol,
+    required this.convertedAmount,
+  });
 
   final Transaction transaction;
+  final TransactionRepository repository;
+  final String currencySymbol;
+  final double convertedAmount;
 
   @override
   Widget build(BuildContext context) {
@@ -1169,15 +1299,18 @@ class _TransactionRow extends StatelessWidget {
 
     switch (transaction.type) {
       case TransactionType.expense:
-        amountText = '− RM ${transaction.amount.abs().toStringAsFixed(2)}';
+        amountText =
+            '− $currencySymbol ${convertedAmount.abs().toStringAsFixed(2)}';
         break;
 
       case TransactionType.income:
-        amountText = '+ RM ${transaction.amount.abs().toStringAsFixed(2)}';
+        amountText =
+            '+ $currencySymbol ${convertedAmount.abs().toStringAsFixed(2)}';
         break;
 
       case TransactionType.transfer:
-        amountText = 'RM ${transaction.amount.abs().toStringAsFixed(2)}';
+        amountText =
+            '$currencySymbol ${convertedAmount.abs().toStringAsFixed(2)}';
         break;
     }
 
@@ -1186,7 +1319,10 @@ class _TransactionRow extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => TransactionDetailPage(transaction: transaction),
+            builder: (_) => TransactionDetailPage(
+              transaction: transaction,
+              repository: repository,
+            ),
           ),
         );
       },
@@ -1254,10 +1390,19 @@ class _TransactionRow extends StatelessWidget {
 }
 
 class _TransactionGroup extends StatelessWidget {
-  const _TransactionGroup({required this.date, required this.transactions});
+  const _TransactionGroup({
+    required this.date,
+    required this.transactions,
+    required this.repository,
+    required this.currencySymbol,
+    required this.convertedAmount,
+  });
 
   final DateTime date;
   final List<Transaction> transactions;
+  final TransactionRepository repository;
+  final String currencySymbol;
+  final double Function(Transaction) convertedAmount;
 
   @override
   Widget build(BuildContext context) {
@@ -1266,10 +1411,10 @@ class _TransactionGroup extends StatelessWidget {
     final groupTotal = transactions.fold<double>(0, (total, transaction) {
       switch (transaction.type) {
         case TransactionType.expense:
-          return total - transaction.amount.abs();
+          return total - convertedAmount(transaction).abs();
 
         case TransactionType.income:
-          return total + transaction.amount.abs();
+          return total + convertedAmount(transaction).abs();
 
         case TransactionType.transfer:
           return total;
@@ -1334,7 +1479,12 @@ class _TransactionGroup extends StatelessWidget {
             children: List.generate(transactions.length, (index) {
               return Column(
                 children: [
-                  _TransactionRow(transaction: transactions[index]),
+                  _TransactionRow(
+                    transaction: transactions[index],
+                    repository: repository,
+                    currencySymbol: currencySymbol,
+                    convertedAmount: convertedAmount(transactions[index]),
+                  ),
 
                   if (index != transactions.length - 1)
                     Padding(
@@ -1392,14 +1542,16 @@ class _TransactionGroup extends StatelessWidget {
 
   String _formatGroupTotal(double total) {
     if (total > 0) {
-      return '+RM ${total.abs().toStringAsFixed(2)}';
+      return '+$currencySymbol '
+          '${total.abs().toStringAsFixed(2)}';
     }
 
     if (total < 0) {
-      return '−RM ${total.abs().toStringAsFixed(2)}';
+      return '−$currencySymbol '
+          '${total.abs().toStringAsFixed(2)}';
     }
 
-    return 'RM 0.00';
+    return '$currencySymbol 0.00';
   }
 
   bool _sameDate(DateTime a, DateTime b) {
@@ -1413,12 +1565,14 @@ class _CashFlowMetric extends StatelessWidget {
     required this.amount,
     required this.prefix,
     required this.color,
+    required this.currencySymbol,
   });
 
   final String label;
   final double amount;
   final String prefix;
   final Color color;
+  final String currencySymbol;
 
   @override
   Widget build(BuildContext context) {
@@ -1435,7 +1589,7 @@ class _CashFlowMetric extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '$prefix RM ${amount.toStringAsFixed(2)}',
+          '$prefix $currencySymbol ${amount.toStringAsFixed(2)}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AppTextStyles.amountSmall.copyWith(

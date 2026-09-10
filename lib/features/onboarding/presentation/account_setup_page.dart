@@ -11,10 +11,7 @@ import 'widgets/onboarding_header.dart';
 import '../domain/onboarding_data.dart';
 
 class AccountSetupPage extends StatefulWidget {
-  const AccountSetupPage({
-    super.key,
-    required this.data,
-  });
+  const AccountSetupPage({super.key, required this.data});
 
   final OnboardingData data;
 
@@ -25,13 +22,9 @@ class AccountSetupPage extends StatefulWidget {
 class _AccountSetupPageState extends State<AccountSetupPage> {
   AccountType selectedType = AccountType.bank;
 
-  final accountNameController = TextEditingController(
-    text: 'Maybank Savings',
-  );
+  final accountNameController = TextEditingController(text: 'Maybank Savings');
 
-  final balanceController = TextEditingController(
-    text: '5000.00',
-  );
+  final balanceController = TextEditingController(text: '5000.00');
 
   @override
   void dispose() {
@@ -63,9 +56,7 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
 
                     const SizedBox(height: AppSpacing.lg),
 
-                    const OnboardingStepper(
-                      currentStep: 3,
-                    ),
+                    const OnboardingStepper(currentStep: 3),
 
                     const SizedBox(height: AppSpacing.lg),
 
@@ -80,8 +71,7 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
 
                     Text(
                       'Add your first account',
-                      style:
-                          AppTextStyles.headlineLargeMobile.copyWith(
+                      style: AppTextStyles.headlineLargeMobile.copyWith(
                         color: colors.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
@@ -114,9 +104,7 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
                         return Expanded(
                           child: Padding(
                             padding: EdgeInsets.only(
-                              right: type != AccountType.values.last
-                                  ? 8
-                                  : 0,
+                              right: type != AccountType.values.last ? 8 : 0,
                             ),
                             child: _AccountTypeCard(
                               type: type,
@@ -164,8 +152,7 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
 
                     TextField(
                       controller: balanceController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(
+                      keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
                       inputFormatters: [
@@ -193,20 +180,14 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color:
-                            colors.primaryContainer.withValues(
-                          alpha: 0.45,
-                        ),
-                        borderRadius:
-                            BorderRadius.circular(AppRadius.lg),
+                        color: colors.primaryContainer.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
                         border: Border.all(
-                          color:
-                              colors.primary.withValues(alpha: 0.15),
+                          color: colors.primary.withValues(alpha: 0.15),
                         ),
                       ),
                       child: Row(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
                             padding: const EdgeInsets.all(5),
@@ -227,8 +208,7 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
                                 children: [
                                   TextSpan(
                                     text: 'Privacy First: ',
-                                    style: AppTextStyles.bodySmall
-                                        .copyWith(
+                                    style: AppTextStyles.bodySmall.copyWith(
                                       color: colors.primary,
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -238,10 +218,8 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
                                         'Mofiney never connects to banking '
                                         'APIs or requests credentials. Your '
                                         'records stay private on your device.',
-                                    style: AppTextStyles.bodySmall
-                                        .copyWith(
-                                      color:
-                                          colors.onSurfaceVariant,
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: colors.onSurfaceVariant,
                                     ),
                                   ),
                                 ],
@@ -256,10 +234,7 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
               ),
             ),
 
-            _AccountBottomActions(
-              onContinue: _continue,
-              onSkip: _skip,
-            ),
+            _AccountBottomActions(onContinue: _continue, onSkip: _skip),
           ],
         ),
       ),
@@ -274,18 +249,14 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
 
     if (accountName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter an account name.'),
-        ),
+        const SnackBar(content: Text('Please enter an account name.')),
       );
       return;
     }
 
     if (openingBalance == null || openingBalance < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid opening balance.'),
-        ),
+        const SnackBar(content: Text('Please enter a valid opening balance.')),
       );
       return;
     }
@@ -297,31 +268,18 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
     );
 
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SetupCompletePage(
-          data: updatedData,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => SetupCompletePage(data: updatedData)),
     );
   }
 
   void _skip() {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SetupCompletePage(
-          data: widget.data,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => SetupCompletePage(data: widget.data)),
     );
   }
 }
 
-enum AccountType {
-  bank,
-  cash,
-  eWallet,
-  credit,
-}
+enum AccountType { bank, cash, eWallet, credit }
 
 extension AccountTypeDetails on AccountType {
   String get label {
@@ -367,9 +325,7 @@ class _AccountTypeCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
 
     return Material(
-      color: selected
-          ? colors.primaryContainer
-          : colors.surfaceContainerLowest,
+      color: selected ? colors.primaryContainer : colors.surfaceContainerLowest,
       borderRadius: BorderRadius.circular(AppRadius.lg),
       child: InkWell(
         onTap: onTap,
@@ -379,9 +335,7 @@ class _AccountTypeCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.lg),
             border: Border.all(
-              color: selected
-                  ? colors.primary
-                  : colors.outlineVariant,
+              color: selected ? colors.primary : colors.outlineVariant,
               width: selected ? 2 : 1,
             ),
           ),
@@ -391,19 +345,14 @@ class _AccountTypeCard extends StatelessWidget {
               Icon(
                 type.icon,
                 size: 21,
-                color: selected
-                    ? colors.primary
-                    : colors.onSurfaceVariant,
+                color: selected ? colors.primary : colors.onSurfaceVariant,
               ),
               const SizedBox(height: 6),
               Text(
                 type.label,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: selected
-                      ? colors.primary
-                      : colors.onSurface,
-                  fontWeight:
-                      selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected ? colors.primary : colors.onSurface,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
             ],
@@ -415,10 +364,7 @@ class _AccountTypeCard extends StatelessWidget {
 }
 
 class _AccountBottomActions extends StatelessWidget {
-  const _AccountBottomActions({
-    required this.onContinue,
-    required this.onSkip,
-  });
+  const _AccountBottomActions({required this.onContinue, required this.onSkip});
 
   final VoidCallback onContinue;
   final VoidCallback onSkip;
@@ -468,4 +414,3 @@ class _AccountBottomActions extends StatelessWidget {
     );
   }
 }
-

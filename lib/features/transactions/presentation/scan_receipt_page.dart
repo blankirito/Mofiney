@@ -71,13 +71,11 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ReceiptProcessingPage(
-          imagePath: _capturedImage!.path,
-        ),
+        builder: (context) =>
+            ReceiptProcessingPage(imagePath: _capturedImage!.path),
       ),
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -90,9 +88,7 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
           children: [
             _buildTopBar(context),
 
-            Expanded(
-              child: _buildScannerArea(context),
-            ),
+            Expanded(child: _buildScannerArea(context)),
 
             _buildBottomControls(context),
           ],
@@ -105,10 +101,7 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
     final colors = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       color: colors.inverseSurface,
       child: Row(
         children: [
@@ -116,10 +109,7 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
             onPressed: () {
               Navigator.pop(context);
             },
-            icon: Icon(
-              Icons.close_rounded,
-              color: colors.onInverseSurface,
-            ),
+            icon: Icon(Icons.close_rounded, color: colors.onInverseSurface),
           ),
 
           Expanded(
@@ -166,9 +156,7 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
               });
             },
             icon: Icon(
-              _flashEnabled
-                  ? Icons.flash_on_rounded
-                  : Icons.flash_off_rounded,
+              _flashEnabled ? Icons.flash_on_rounded : Icons.flash_off_rounded,
               color: colors.onInverseSurface,
             ),
           ),
@@ -198,14 +186,9 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
       borderRadius: BorderRadius.circular(999),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 6,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected
-              ? colors.primary
-              : Colors.transparent,
+          color: selected ? colors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
@@ -233,16 +216,11 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
         children: [
           if (_capturedImage != null)
             Positioned.fill(
-              child: Image.file(
-                File(_capturedImage!.path),
-                fit: BoxFit.cover,
-              ),
+              child: Image.file(File(_capturedImage!.path), fit: BoxFit.cover),
             )
           else
             Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.18),
-              ),
+              child: Container(color: Colors.black.withValues(alpha: 0.18)),
             ),
 
           Container(
@@ -250,10 +228,7 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
             height: 410,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: colors.primaryFixedDim,
-                width: 2,
-              ),
+              border: Border.all(color: colors.primaryFixedDim, width: 2),
             ),
           ),
 
@@ -284,9 +259,7 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
                   'Ensure good lighting · Keep edges visible',
                   style: TextStyle(
                     fontSize: 12,
-                    color: colors.onInverseSurface.withValues(
-                      alpha: 0.7,
-                    ),
+                    color: colors.onInverseSurface.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -301,12 +274,7 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(
-        20,
-        18,
-        20,
-        22,
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
       color: colors.surface,
       child: _capturedImage == null
           ? Row(
@@ -348,9 +316,7 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text(
-                          'Batch scanning will be added later.',
-                        ),
+                        content: Text('Batch scanning will be added later.'),
                       ),
                     );
                   },
@@ -362,12 +328,8 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: _retake,
-                    icon: const Icon(
-                      Icons.replay_rounded,
-                    ),
-                    label: const Text(
-                      'Retake',
-                    ),
+                    icon: const Icon(Icons.replay_rounded),
+                    label: const Text('Retake'),
                   ),
                 ),
 
@@ -376,12 +338,8 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: _usePhoto,
-                    icon: const Icon(
-                      Icons.check_circle_outline_rounded,
-                    ),
-                    label: const Text(
-                      'Use Photo',
-                    ),
+                    icon: const Icon(Icons.check_circle_outline_rounded),
+                    label: const Text('Use Photo'),
                   ),
                 ),
               ],
@@ -412,10 +370,7 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
                 color: colors.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(
-                icon,
-                color: colors.onSurfaceVariant,
-              ),
+              child: Icon(icon, color: colors.onSurfaceVariant),
             ),
 
             const SizedBox(height: 5),
