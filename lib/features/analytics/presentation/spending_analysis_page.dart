@@ -722,7 +722,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
               Expanded(
                 child: Text(
-                  'Insights are based only on transactions recorded in Finora.',
+                  'Insights are based only on transactions recorded in Mofiney.',
                   style: TextStyle(
                     fontSize: 11,
                     height: 1.4,

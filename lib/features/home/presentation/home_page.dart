@@ -17,7 +17,7 @@ import '../../analytics/presentation/spending_analysis_page.dart';
 import '../../analytics/presentation/forecast_page.dart';
 import '../../transactions/data/mock_transactions.dart';
 import '../../transactions/domain/transaction.dart';
-
+import '../../transactions/presentation/transaction_detail_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -94,13 +94,22 @@ class _HomePageState extends State<HomePage> {
 
               _RecentTransactionsSection(
                 currencySymbol: _data.currencySymbol,
-                transactions: _data.recentTransactions,
+                transactions: _recentTransactions,
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  List<Transaction> get _recentTransactions {
+    final transactions = [...mockTransactions]
+      ..sort(
+        (a, b) => b.dateTime.compareTo(a.dateTime),
+      );
+
+    return transactions.take(4).toList();
   }
 
   Widget _buildTopBar(BuildContext context) {
@@ -982,7 +991,7 @@ class _RecentTransactionsSection extends StatelessWidget {
   });
 
   final String currencySymbol;
-  final List<HomeTransaction> transactions;
+  final List<Transaction> transactions;
 
   @override
   Widget build(BuildContext context) {
@@ -1055,8 +1064,36 @@ class _TransactionRow extends StatelessWidget {
     required this.currencySymbol,
   });
 
-  final HomeTransaction transaction;
+  final Transaction transaction;
   final String currencySymbol;
+
+  String _buildSubtitle(Transaction transaction) {
+    final dateTime = transaction.dateTime;
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    final date =
+        '${months[dateTime.month - 1]} ${dateTime.day}';
+
+    if (transaction.type == TransactionType.transfer) {
+      return 'Transfer · $date';
+    }
+
+    return '${transaction.category} · $date';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1067,19 +1104,21 @@ class _TransactionRow extends StatelessWidget {
     final IconData icon;
 
     switch (transaction.type) {
-      case HomeTransactionType.expense:
+      case TransactionType.expense:
         accentColor = colors.error;
-        iconBackground = colors.errorContainer.withValues(alpha: 0.65);
+        iconBackground =
+            colors.errorContainer.withValues(alpha: 0.65);
         icon = Icons.shopping_bag_outlined;
         break;
 
-      case HomeTransactionType.income:
+      case TransactionType.income:
         accentColor = colors.tertiary;
-        iconBackground = colors.tertiaryContainer.withValues(alpha: 0.45);
+        iconBackground =
+            colors.tertiaryContainer.withValues(alpha: 0.45);
         icon = Icons.payments_outlined;
         break;
 
-      case HomeTransactionType.transfer:
+      case TransactionType.transfer:
         accentColor = colors.onSurface;
         iconBackground = colors.surfaceContainerHigh;
         icon = Icons.swap_horiz_rounded;
@@ -1088,7 +1127,14 @@ class _TransactionRow extends StatelessWidget {
 
     return InkWell(
       onTap: () {
-        // Later: open transaction details.
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TransactionDetailPage(
+              transaction: transaction,
+            ),
+          ),
+        );
       },
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -1121,7 +1167,7 @@ class _TransactionRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    transaction.subtitle,
+                    _buildSubtitle(transaction),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.bodySmall.copyWith(
@@ -1139,11 +1185,12 @@ class _TransactionRow extends StatelessWidget {
               children: [
                 Text(
                   MoneyFormatter.format(
-                    amount: transaction.type == HomeTransactionType.expense
+                    amount: transaction.type == TransactionType.expense
                         ? -transaction.amount.abs()
                         : transaction.amount.abs(),
                     symbol: currencySymbol,
-                    showSign: transaction.type != HomeTransactionType.transfer,
+                    showSign:
+                        transaction.type != TransactionType.transfer,
                   ),
                   style: AppTextStyles.amountMedium.copyWith(
                     color: accentColor,

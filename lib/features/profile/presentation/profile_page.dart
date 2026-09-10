@@ -4,6 +4,14 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../accounts/presentation/accounts_page.dart';
+import 'profile_details_page.dart';
+import 'monthly_target_budget_page.dart';
+import 'manage_categories_page.dart';
+import 'recurring_transactions_page.dart';
+import 'appearance_page.dart';
+import 'backup_restore_page.dart';
+import 'export_financial_data_page.dart';
+import 'base_currency_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -45,9 +53,17 @@ class _ProfilePageState extends State<ProfilePage> {
                 children: [
                   _buildSettingTile(
                     context,
-                    icon: Icons.monetization_on_outlined,
+                    icon: Icons.payments_outlined,
                     title: 'Base Currency',
-                    subtitle: 'MYR — Malaysian Ringgit',
+                    subtitle: 'MYR (RM)',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const BaseCurrencyPage(),
+                        ),
+                      );
+                    },
                   ),
                   _divider(context),
                   _buildSettingTile(
@@ -55,6 +71,14 @@ class _ProfilePageState extends State<ProfilePage> {
                     icon: Icons.pie_chart_outline_rounded,
                     title: 'Monthly Target Budget',
                     subtitle: 'RM 4,000.00',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MonthlyTargetBudgetPage(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -70,6 +94,14 @@ class _ProfilePageState extends State<ProfilePage> {
                     icon: Icons.category_outlined,
                     title: 'Manage Categories',
                     subtitle: 'Expense & income categories',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ManageCategoriesPage(),
+                        ),
+                      );
+                    },
                   ),
                   _divider(context),
                   _buildSettingTile(
@@ -92,6 +124,14 @@ class _ProfilePageState extends State<ProfilePage> {
                     icon: Icons.update_rounded,
                     title: 'Recurring Transactions',
                     subtitle: 'Scheduled recurring records',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const RecurringTransactionsPage(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -107,6 +147,14 @@ class _ProfilePageState extends State<ProfilePage> {
                     icon: Icons.palette_outlined,
                     title: 'Appearance',
                     subtitle: 'System default',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AppearancePage(),
+                        ),
+                      );
+                    },
                   ),
                   _divider(context),
                   _buildSwitchTile(
@@ -132,9 +180,17 @@ class _ProfilePageState extends State<ProfilePage> {
                 children: [
                   _buildSettingTile(
                     context,
-                    icon: Icons.cloud_sync_outlined,
+                    icon: Icons.backup_outlined,
                     title: 'Backup & Restore',
-                    subtitle: 'Local & cloud backup',
+                    subtitle: 'Manage your local data backup',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const BackupRestorePage(),
+                        ),
+                      );
+                    },
                   ),
                   _divider(context),
                   _buildSettingTile(
@@ -142,6 +198,14 @@ class _ProfilePageState extends State<ProfilePage> {
                     icon: Icons.file_download_outlined,
                     title: 'Export Financial Data',
                     subtitle: 'CSV & PDF reports',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ExportFinancialDataPage(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -198,19 +262,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   label: const Text('Log Out'),
                 ),
               ),
-
-              const SizedBox(height: AppSpacing.md),
-
-              Center(
-                child: Text(
-                  'Monifey • Offline-first personal finance',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant,
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -247,84 +298,102 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _buildProfileCard(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(
-          color: colors.outlineVariant.withValues(alpha: 0.4),
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const ProfileDetailsPage(),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(AppRadius.xl),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          border: Border.all(
+            color: colors.outlineVariant.withValues(
+              alpha: 0.4,
+            ),
+          ),
         ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: colors.primaryContainer,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  'U',
-                  style: AppTextStyles.headlineMedium.copyWith(
-                    color: colors.onPrimaryContainer,
-                    fontWeight: FontWeight.w800,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: colors.primaryContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'U',
+                    style: AppTextStyles.headlineMedium.copyWith(
+                      color: colors.onPrimaryContainer,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-              ),
 
-              const SizedBox(width: AppSpacing.md),
+                const SizedBox(width: AppSpacing.md),
 
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Monifey User',
-                      style: AppTextStyles.headlineMedium.copyWith(
-                        color: colors.onSurface,
-                        fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Mofiney User',
+                        style: AppTextStyles.headlineMedium.copyWith(
+                          color: colors.onSurface,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
 
-                    const SizedBox(height: 2),
+                      const SizedBox(height: 2),
 
-                    Text(
-                      'Local profile',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: colors.onSurfaceVariant,
+                      Text(
+                        'Local profile',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
 
-          const SizedBox(height: AppSpacing.md),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: colors.onSurfaceVariant,
+                ),
+              ],
+            ),
 
-          Wrap(
-            spacing: AppSpacing.xs,
-            runSpacing: AppSpacing.xs,
-            children: [
-              _buildProfilePill(
-                context,
-                icon: Icons.account_balance_wallet_outlined,
-                label: '5 Accounts',
-              ),
-              _buildProfilePill(
-                context,
-                icon: Icons.payments_outlined,
-                label: 'MYR Currency',
-              ),
-            ],
-          ),
-        ],
+            const SizedBox(height: AppSpacing.md),
+
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: [
+                _buildProfilePill(
+                  context,
+                  icon: Icons.account_balance_wallet_outlined,
+                  label: '5 Accounts',
+                ),
+                _buildProfilePill(
+                  context,
+                  icon: Icons.payments_outlined,
+                  label: 'MYR Currency',
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

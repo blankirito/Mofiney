@@ -199,7 +199,7 @@ class _ReceiptProcessingPageState
         Text(
           _currentStep >= _steps.length
               ? 'Your receipt is ready for review.'
-              : 'Finora is extracting line items, merchant details and totals.',
+              : 'Mofiney is extracting line items, merchant details and totals.',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 14,

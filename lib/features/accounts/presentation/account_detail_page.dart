@@ -13,6 +13,7 @@ import '../domain/account_balance_calculator.dart';
 import '../domain/account_monthly_cash_flow.dart';
 import '../domain/account_balance_history.dart';
 import 'edit_account_page.dart';
+import '../../transactions/presentation/transaction_detail_page.dart';
 
 class AccountDetailPage extends StatelessWidget {
   const AccountDetailPage({
@@ -1325,10 +1326,23 @@ class _RecentActivityRow extends StatelessWidget {
 
     final sign = isPositive ? '+' : '-';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: 10,
-      ),
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TransactionDetailPage(
+              transaction: transaction,
+            ),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xs,
+          vertical: 10,
+        ),
       child: Row(
         children: [
           Container(
@@ -1414,6 +1428,7 @@ class _RecentActivityRow extends StatelessWidget {
           ),
         ],
       ),
+    )
     );
   }
 
