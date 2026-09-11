@@ -21,6 +21,8 @@ import '../../../core/app_dependencies.dart';
 import '../../../core/currency/currency_catalog.dart';
 import '../../../core/currency/currency_converter.dart';
 
+import 'package:share_plus/share_plus.dart';
+
 class AccountDetailPage extends StatefulWidget {
   const AccountDetailPage({
     super.key,
@@ -997,6 +999,48 @@ class _RecentActivityCard extends StatefulWidget {
 
 class _RecentActivityCardState extends State<_RecentActivityCard> {
   _TransactionFilter _selectedFilter = _TransactionFilter.all;
+  bool _isExporting = false;
+
+  Future<void> _exportAccount() async {
+    if (_isExporting) {
+      return;
+    }
+
+    setState(() {
+      _isExporting = true;
+    });
+
+    try {
+      final file = await financialExportService.createAccountCsvExport(
+        widget.account,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: 'Mofiney export: ${widget.account.name}',
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to export account: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+        });
+      }
+    }
+  }
 
   String _emptyMessage() {
     switch (_selectedFilter) {
@@ -1093,12 +1137,8 @@ class _RecentActivityCardState extends State<_RecentActivityCard> {
               const SizedBox(width: AppSpacing.sm),
 
               TextButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Export coming next')),
-                  );
-                },
-                child: const Text('Export'),
+                onPressed: _isExporting ? null : _exportAccount,
+                child: Text(_isExporting ? 'Preparing...' : 'Export'),
               ),
             ],
           ),

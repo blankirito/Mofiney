@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../core/database/app_database.dart';
 import '../domain/export_options.dart';
+import '../../accounts/domain/account.dart';
 
 class FinancialExportService {
   FinancialExportService(this._database);
@@ -139,6 +140,81 @@ class FinancialExportService {
     }
 
     return files;
+  }
+
+  Future<File> createAccountCsvExport(Account account) async {
+    final directory = await getTemporaryDirectory();
+
+    final exportDirectory = Directory('${directory.path}/mofiney_exports');
+
+    await exportDirectory.create(recursive: true);
+
+    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+
+    final allTransactions = await _database
+        .select(_database.transactionEntries)
+        .get();
+
+    final accountTransactions =
+        allTransactions.where((transaction) {
+          return transaction.accountId == account.id ||
+              transaction.destinationAccountId == account.id;
+        }).toList()..sort(
+          (first, second) =>
+              second.transactionDateTime.compareTo(first.transactionDateTime),
+        );
+
+    return _writeCsv(exportDirectory, 'mofiney_${account.id}_$timestamp.csv', [
+      ['Mofiney Account Export'],
+      ['Account Name', account.name],
+      ['Account Type', account.type.name],
+      ['Opening Balance (MYR)', account.openingBalance],
+      ['Credit Limit (MYR)', account.creditLimit ?? ''],
+      ['Exported At', DateTime.now().toIso8601String()],
+      [],
+      [
+        'Date',
+        'Title',
+        'Type',
+        'Category',
+        'Direction',
+        'Amount (MYR)',
+        'Other Account',
+        'Note',
+        'Tags',
+      ],
+      ...accountTransactions.map((transaction) {
+        final isSourceAccount = transaction.accountId == account.id;
+
+        final direction = transaction.type == 'transfer'
+            ? isSourceAccount
+                  ? 'Transfer out'
+                  : 'Transfer in'
+            : transaction.type;
+
+        final amount = isSourceAccount
+            ? transaction.accountAmount ?? transaction.amount
+            : transaction.destinationAccountAmount ?? transaction.amount;
+
+        final otherAccount = transaction.type == 'transfer'
+            ? isSourceAccount
+                  ? transaction.destinationAccount ?? ''
+                  : transaction.account
+            : '';
+
+        return [
+          transaction.transactionDateTime.toIso8601String(),
+          transaction.title,
+          transaction.type,
+          transaction.category,
+          direction,
+          amount,
+          otherAccount,
+          transaction.note ?? '',
+          transaction.tags ?? '',
+        ];
+      }),
+    ]);
   }
 
   bool _matchesDateRange(DateTime date, ExportDateRange range) {

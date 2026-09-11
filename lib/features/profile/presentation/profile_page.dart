@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../accounts/presentation/accounts_page.dart';
 import 'profile_details_page.dart';
 import 'monthly_target_budget_page.dart';
 import 'manage_categories_page.dart';
@@ -21,6 +20,8 @@ import 'dart:async';
 import '../../accounts/domain/account.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/currency/currency_catalog.dart';
+import '../data/profile_preferences.dart';
+import 'profile_accounts_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -43,14 +44,41 @@ class _ProfilePageState extends State<ProfilePage> {
 
   StreamSubscription<AppSettingsEntry?>? _settingsSubscription;
 
+  final ProfilePreferences _profilePreferences = ProfilePreferences();
+
+  String _displayName = ProfilePreferences.defaultDisplayName;
+
+  String get _displayInitial {
+    final trimmedName = _displayName.trim();
+
+    if (trimmedName.isEmpty) {
+      return 'U';
+    }
+
+    return trimmedName.substring(0, 1).toUpperCase();
+  }
+
   @override
   void initState() {
     super.initState();
 
+    _loadDisplayName();
     _watchAccounts();
     _watchSettings();
     _loadAppLockStatus();
     _loadDeviceAuthenticationState();
+  }
+
+  Future<void> _loadDisplayName() async {
+    final displayName = await _profilePreferences.loadDisplayName();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _displayName = displayName;
+    });
   }
 
   Future<void> _loadAppLockStatus() async {
@@ -300,10 +328,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => AccountsPage(
-                            repository: accountRepository,
-                            transactionRepository: transactionRepository,
-                          ),
+                          builder: (_) => const ProfileAccountsPage(),
                         ),
                       );
                     },
@@ -502,11 +527,13 @@ class _ProfilePageState extends State<ProfilePage> {
     final colors = Theme.of(context).colorScheme;
 
     return InkWell(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const ProfileDetailsPage()),
         );
+
+        _loadDisplayName();
       },
       borderRadius: BorderRadius.circular(AppRadius.xl),
       child: Container(
@@ -532,7 +559,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    'U',
+                    _displayInitial,
                     style: AppTextStyles.headlineMedium.copyWith(
                       color: colors.onPrimaryContainer,
                       fontWeight: FontWeight.w800,
@@ -547,7 +574,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Mofiney User',
+                        _displayName,
                         style: AppTextStyles.headlineMedium.copyWith(
                           color: colors.onSurface,
                           fontWeight: FontWeight.w700,

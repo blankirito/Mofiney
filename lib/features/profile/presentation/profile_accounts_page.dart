@@ -9,23 +9,34 @@ import '../../../core/app_dependencies.dart';
 import '../../accounts/presentation/add_account_page.dart';
 import '../../accounts/presentation/edit_account_page.dart';
 
-class AccountsPage extends StatefulWidget {
-  const AccountsPage({super.key});
+import '../../../core/currency/currency_catalog.dart';
+import '../../../core/currency/currency_converter.dart';
+import '../../../core/database/app_database.dart';
+
+class ProfileAccountsPage extends StatefulWidget {
+  const ProfileAccountsPage({super.key});
 
   @override
-  State<AccountsPage> createState() => _AccountsPageState();
+  State<ProfileAccountsPage> createState() => _ProfileAccountsPageState();
 }
 
-class _AccountsPageState extends State<AccountsPage> {
+class _ProfileAccountsPageState extends State<ProfileAccountsPage> {
   List<Account> _accounts = [];
 
   StreamSubscription<List<Account>>? _accountsSubscription;
+
+  AppSettingsEntry? _settings;
+
+  StreamSubscription<AppSettingsEntry?>? _settingsSubscription;
+
+  CurrencyConverter _converter = CurrencyConverter('MYR');
 
   @override
   void initState() {
     super.initState();
 
     _watchAccounts();
+    _watchSettings();
   }
 
   void _watchAccounts() {
@@ -47,14 +58,55 @@ class _AccountsPageState extends State<AccountsPage> {
     );
   }
 
+  void _watchSettings() {
+    _settingsSubscription?.cancel();
+
+    _settingsSubscription = appSettingsRepository.watchSettings().listen(
+      (settings) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _settings = settings;
+        });
+
+        _refreshConverter();
+      },
+      onError: (Object error) {
+        debugPrint('Failed to watch account display settings: $error');
+      },
+    );
+  }
+
+  Future<void> _refreshConverter() async {
+    final converter = CurrencyConverter(_baseCurrency);
+
+    await converter.warm(const ['MYR']);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _converter = converter;
+    });
+  }
+
   @override
   void dispose() {
     _accountsSubscription?.cancel();
+    _settingsSubscription?.cancel();
+
     super.dispose();
   }
 
   List<Account> get _activeAccounts {
     return _accounts.where((account) => account.isActive).toList();
+  }
+
+  List<Account> get _archivedAccounts {
+    return _accounts.where((account) => !account.isActive).toList();
   }
 
   List<Account> _accountsByType(AccountType type) {
@@ -77,8 +129,18 @@ class _AccountsPageState extends State<AccountsPage> {
         .fold(0, (total, account) => total + account.openingBalance);
   }
 
+  String get _baseCurrency {
+    return _settings?.baseCurrency ?? 'MYR';
+  }
+
+  String get _currencySymbol {
+    return CurrencyCatalog.find(_baseCurrency).symbol;
+  }
+
   String _money(double amount) {
-    return 'RM ${amount.toStringAsFixed(2)}';
+    final displayAmount = _converter.convert(amount, 'MYR');
+
+    return '$_currencySymbol ${displayAmount.toStringAsFixed(2)}';
   }
 
   @override
@@ -139,6 +201,12 @@ class _AccountsPageState extends State<AccountsPage> {
                 icon: Icons.credit_card_rounded,
                 type: AccountType.creditCard,
               ),
+
+              if (_archivedAccounts.isNotEmpty) ...[
+                const SizedBox(height: 24),
+
+                _buildArchivedAccountsSection(context),
+              ],
 
               const SizedBox(height: 24),
 
@@ -312,7 +380,7 @@ class _AccountsPageState extends State<AccountsPage> {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  'MYR Track',
+                  '$_baseCurrency Display',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
@@ -417,6 +485,101 @@ class _AccountsPageState extends State<AccountsPage> {
           (account) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _buildAccountCard(context, account),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildArchivedAccountsSection(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.archive_outlined,
+              size: 18,
+              color: colors.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'ARCHIVED ACCOUNTS',
+              style: TextStyle(
+                fontSize: 11,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w700,
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '${_archivedAccounts.length}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 8),
+
+        ..._archivedAccounts.map(
+          (account) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: colors.outlineVariant.withValues(alpha: 0.5),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _iconForAccount(account.type),
+                    color: colors.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          account.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Archived · ${account.currencyCode}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  OutlinedButton(
+                    onPressed: () => _restoreAccount(account),
+                    child: const Text('Restore'),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ],
@@ -745,6 +908,23 @@ class _AccountsPageState extends State<AccountsPage> {
     }
 
     await accountRepository.updateAccount(updatedAccount);
+  }
+
+  Future<void> _restoreAccount(Account account) async {
+    final hasActivePrimary = _activeAccounts.any(
+      (candidate) => candidate.isPrimary,
+    );
+
+    await accountRepository.updateAccount(
+      account.copyWith(isActive: true, isPrimary: !hasActivePrimary),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('${account.name} restored.')));
   }
 
   Future<void> _archiveAccount(Account account) async {

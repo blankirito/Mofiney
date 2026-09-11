@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../transactions/domain/transaction.dart';
+import '../../../core/utils/money_formatter.dart';
 
 class ForecastTrendBucket {
   const ForecastTrendBucket({
@@ -31,9 +32,27 @@ class ForecastCategoryPreview {
 enum ForecastChangeType { increase, decrease, stable }
 
 class ForecastPage extends StatelessWidget {
-  const ForecastPage({super.key, required this.transactions});
+  const ForecastPage({
+    super.key,
+    required this.transactions,
+    required this.currencySymbol,
+    required this.convertMyr,
+  });
 
   final List<Transaction> transactions;
+  final String currencySymbol;
+  final double Function(double) convertMyr;
+
+  double _display(double amount) {
+    return convertMyr(amount);
+  }
+
+  String _money(double amount) {
+    return MoneyFormatter.format(
+      amount: _display(amount),
+      symbol: currencySymbol,
+    );
+  }
 
   DateTime get _referenceDate => DateTime.now();
 
@@ -369,7 +388,7 @@ class ForecastPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      'RM ${item.amount.toStringAsFixed(2)}',
+                      _money(item.amount),
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -408,7 +427,7 @@ class ForecastPage extends StatelessWidget {
 
   Widget _buildCategoryForecastCard(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    const previewTotal = 2680.00;
+    const previewTotal = 0.00;
 
     return Container(
       width: double.infinity,
@@ -473,11 +492,13 @@ class ForecastPage extends StatelessWidget {
   }
 
   String _formatChartAmount(double amount) {
-    if (amount >= 1000) {
-      return 'RM ${(amount / 1000).toStringAsFixed(1)}k';
+    final displayAmount = _display(amount);
+
+    if (displayAmount >= 1000) {
+      return '$currencySymbol ${(displayAmount / 1000).toStringAsFixed(1)}k';
     }
 
-    return 'RM ${amount.toStringAsFixed(2)}';
+    return '$currencySymbol ${displayAmount.toStringAsFixed(2)}';
   }
 
   Widget _buildTrendCard(BuildContext context) {
@@ -678,7 +699,7 @@ class ForecastPage extends StatelessWidget {
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
-              'RM ${amount.toStringAsFixed(2)}',
+              _money(amount),
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -1011,7 +1032,7 @@ class ForecastPage extends StatelessWidget {
           const SizedBox(height: 14),
 
           Text(
-            'RM ${predictedAmount.toStringAsFixed(2)}',
+            _money(predictedAmount),
             style: TextStyle(
               fontSize: 34,
               fontWeight: FontWeight.w700,
@@ -1036,8 +1057,8 @@ class ForecastPage extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Expected Range: '
-                    'RM ${lowerRange.toStringAsFixed(2)} – '
-                    'RM ${upperRange.toStringAsFixed(2)}',
+                    '${_money(lowerRange)} – '
+                    '${_money(upperRange)}',
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,

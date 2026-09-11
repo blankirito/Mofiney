@@ -7,6 +7,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 
 import '../data/transaction_repository.dart';
+import '../data/receipt_storage.dart';
 import '../domain/transaction.dart';
 import 'edit_transaction_page.dart';
 import '../../../core/app_dependencies.dart';
@@ -188,7 +189,15 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
     }
 
     try {
+      final receiptPath = transaction.receiptPath;
+
       await widget.repository.deleteTransaction(transaction.id);
+
+      try {
+        await ReceiptStorage.delete(receiptPath);
+      } catch (_) {
+        // The transaction is already deleted even if receipt cleanup fails.
+      }
 
       if (!mounted) {
         return;

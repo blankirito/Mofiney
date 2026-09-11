@@ -80,7 +80,7 @@ class _BudgetPageState extends State<BudgetPage> {
 
                     _BudgetSummaryCard(
                       budget: selectedBudget,
-                      currencySymbol: widget.data.currencySymbol,
+                      currencySymbol: 'RM',
                     ),
 
                     const SizedBox(height: AppSpacing.lg),
@@ -111,7 +111,7 @@ class _BudgetPageState extends State<BudgetPage> {
                         return _BudgetPresetButton(
                           value: value,
                           selected: value != null && value == selectedBudget,
-                          currencySymbol: widget.data.currencySymbol,
+                          currencySymbol: 'RM',
                           onTap: () {
                             if (value == null) {
                               _showCustomBudgetDialog(context);
@@ -174,7 +174,7 @@ class _BudgetPageState extends State<BudgetPage> {
             controller: controller,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
-              prefixText: '${widget.data.currencySymbol} ',
+              prefixText: 'RM ',
               hintText: 'Enter amount',
             ),
           ),

@@ -33,7 +33,7 @@ class AppSettingsRepository {
         .insert(
           const AppSettingsEntriesCompanion(
             id: Value(1),
-            monthlyBudget: Value(4000),
+            monthlyBudget: Value(0),
             baseCurrency: Value('MYR'),
           ),
         );

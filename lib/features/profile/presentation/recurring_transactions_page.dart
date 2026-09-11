@@ -12,6 +12,10 @@ import '../../accounts/domain/account.dart';
 import '../domain/recurring_schedule.dart';
 import '../../categories/domain/category.dart';
 
+import '../../../core/currency/currency_catalog.dart';
+import '../../../core/currency/currency_converter.dart';
+import '../../../core/database/app_database.dart';
+
 enum _RecurringFilter { all, expense, income }
 
 enum _RecurringType { expense, income }
@@ -64,6 +68,12 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
 
   StreamSubscription<List<Category>>? _categoriesSubscription;
 
+  AppSettingsEntry? _settings;
+
+  StreamSubscription<AppSettingsEntry?>? _settingsSubscription;
+
+  CurrencyConverter _converter = CurrencyConverter('MYR');
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +81,7 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
     _watchSchedules();
     _watchAccounts();
     _watchCategories();
+    _watchSettings();
   }
 
   void _watchSchedules() {
@@ -134,6 +145,41 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
     );
   }
 
+  void _watchSettings() {
+    _settingsSubscription?.cancel();
+
+    _settingsSubscription = appSettingsRepository.watchSettings().listen(
+      (settings) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _settings = settings;
+        });
+
+        _refreshConverter();
+      },
+      onError: (Object error) {
+        debugPrint('Failed to watch recurring display settings: $error');
+      },
+    );
+  }
+
+  Future<void> _refreshConverter() async {
+    final converter = CurrencyConverter(_baseCurrency);
+
+    await converter.warm(const ['MYR']);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _converter = converter;
+    });
+  }
+
   void _rebuildItems() {
     final accountNames = {
       for (final account in _accounts) account.id: account.name,
@@ -183,8 +229,23 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
     _schedulesSubscription?.cancel();
     _accountsSubscription?.cancel();
     _categoriesSubscription?.cancel();
+    _settingsSubscription?.cancel();
 
     super.dispose();
+  }
+
+  String get _baseCurrency {
+    return _settings?.baseCurrency ?? 'MYR';
+  }
+
+  String get _currencySymbol {
+    return CurrencyCatalog.find(_baseCurrency).symbol;
+  }
+
+  String _money(double amount) {
+    final displayAmount = _converter.convert(amount, 'MYR');
+
+    return '$_currencySymbol ${displayAmount.toStringAsFixed(2)}';
   }
 
   @override
@@ -231,7 +292,7 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
                   Expanded(
                     child: _SummaryTile(
                       label: 'MONTHLY OUTFLOW',
-                      value: '-RM ${monthlyExpense.toStringAsFixed(2)}',
+                      value: '-${_money(monthlyExpense)}',
                       isNegative: true,
                     ),
                   ),
@@ -241,7 +302,7 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
                   Expanded(
                     child: _SummaryTile(
                       label: 'MONTHLY INFLOW',
-                      value: '+RM ${monthlyIncome.toStringAsFixed(2)}',
+                      value: '+${_money(monthlyIncome)}',
                     ),
                   ),
                 ],
@@ -268,7 +329,7 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
                     const Spacer(),
 
                     Text(
-                      '${net >= 0 ? '+' : '-'}RM ${net.abs().toStringAsFixed(2)}',
+                      '${net >= 0 ? '+' : '-'}${_money(net.abs())}',
                       style: AppTextStyles.amountSmall.copyWith(
                         color: net >= 0 ? colors.tertiary : colors.error,
                         fontWeight: FontWeight.w700,
@@ -362,6 +423,7 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
                   padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                   child: _RecurringCard(
                     item: item,
+                    amountLabel: _money(item.amount),
                     onToggleActive: () {
                       _toggleRecurring(item);
                     },
@@ -908,12 +970,14 @@ class _FilterTab extends StatelessWidget {
 class _RecurringCard extends StatelessWidget {
   const _RecurringCard({
     required this.item,
+    required this.amountLabel,
     required this.onToggleActive,
     required this.onEdit,
     required this.onDelete,
   });
 
   final _RecurringItem item;
+  final String amountLabel;
   final VoidCallback onToggleActive;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -978,7 +1042,7 @@ class _RecurringCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${isExpense ? '-' : '+'}RM ${item.amount.toStringAsFixed(2)}',
+                      '${isExpense ? '-' : '+'}$amountLabel',
                       style: AppTextStyles.amountSmall.copyWith(
                         color: isExpense ? colors.error : colors.tertiary,
                         fontWeight: FontWeight.w700,

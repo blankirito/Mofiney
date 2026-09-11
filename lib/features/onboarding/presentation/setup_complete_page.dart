@@ -9,10 +9,68 @@ import 'widgets/onboarding_header.dart';
 import '../domain/onboarding_data.dart';
 import '../../../core/navigation/main_shell.dart';
 
-class SetupCompletePage extends StatelessWidget {
+import '../../../core/app_dependencies.dart';
+import '../data/onboarding_preferences.dart';
+import '../data/onboarding_setup_service.dart';
+
+class SetupCompletePage extends StatefulWidget {
   const SetupCompletePage({super.key, required this.data});
 
   final OnboardingData data;
+
+  @override
+  State<SetupCompletePage> createState() => _SetupCompletePageState();
+}
+
+class _SetupCompletePageState extends State<SetupCompletePage> {
+  bool _isCompleting = false;
+
+  OnboardingData get data => widget.data;
+
+  Future<void> _finishSetup() async {
+    if (_isCompleting) {
+      return;
+    }
+
+    setState(() {
+      _isCompleting = true;
+    });
+
+    try {
+      final setupService = OnboardingSetupService(
+        appSettingsRepository: appSettingsRepository,
+        accountRepository: accountRepository,
+        onboardingPreferences: OnboardingPreferences(),
+      );
+
+      await setupService.complete(data);
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MainShell()),
+        (route) => false,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not complete setup. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCompleting = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -159,12 +217,8 @@ class SetupCompletePage extends StatelessWidget {
             ),
 
             _BottomAction(
-              onPressed: () {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const MainShell()),
-                  (route) => false,
-                );
-              },
+              onPressed: _isCompleting ? null : _finishSetup,
+              isLoading: _isCompleting,
             ),
           ],
         ),
@@ -195,7 +249,7 @@ class _SummaryCard extends StatelessWidget {
           _SummaryRow(
             icon: Icons.currency_exchange_rounded,
             iconText: data.currencySymbol,
-            title: 'PRIMARY CURRENCY',
+            title: 'DISPLAY CURRENCY',
             value: '${data.currencyName} (${data.currencyCode})',
             trailing: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -220,10 +274,10 @@ class _SummaryCard extends StatelessWidget {
             title: 'MONTHLY SPENDING TARGET',
             value: data.monthlyBudget == null
                 ? 'Not set'
-                : '${data.currencySymbol} ${data.monthlyBudget!.toStringAsFixed(2)} / mo',
+                : 'RM ${data.monthlyBudget!.toStringAsFixed(2)} / mo',
             subtitle: dailyTarget == null
                 ? 'You can add a budget anytime'
-                : '${data.currencySymbol} ${dailyTarget!.toStringAsFixed(2)} daily pace',
+                : 'RM ${dailyTarget!.toStringAsFixed(2)} daily pace',
           ),
 
           Divider(height: AppSpacing.xl, color: colors.outlineVariant),
@@ -234,7 +288,7 @@ class _SummaryCard extends StatelessWidget {
             value: data.accountName ?? 'No account added',
             subtitle: data.openingBalance == null
                 ? 'You can create an account later'
-                : '${data.currencySymbol} ${data.openingBalance!.toStringAsFixed(2)} initial balance',
+                : 'RM ${data.openingBalance!.toStringAsFixed(2)} initial balance',
           ),
         ],
       ),
@@ -328,9 +382,10 @@ class _SummaryRow extends StatelessWidget {
 }
 
 class _BottomAction extends StatelessWidget {
-  const _BottomAction({required this.onPressed});
+  const _BottomAction({required this.onPressed, required this.isLoading});
 
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -351,14 +406,20 @@ class _BottomAction extends StatelessWidget {
           children: [
             FilledButton(
               onPressed: onPressed,
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Go to Dashboard'),
-                  SizedBox(width: AppSpacing.xs),
-                  Icon(Icons.arrow_forward_rounded, size: 18),
-                ],
-              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('Go to Dashboard'),
+                        SizedBox(width: AppSpacing.xs),
+                        Icon(Icons.arrow_forward_rounded, size: 18),
+                      ],
+                    ),
             ),
 
             const SizedBox(height: AppSpacing.sm),

@@ -7,7 +7,6 @@ import 'scan_receipt_page.dart';
 
 import '../../../core/app_dependencies.dart';
 import '../../../core/utils/money_input_parser.dart';
-import '../../../core/currency/currency_catalog.dart';
 import '../domain/transaction.dart';
 
 import 'dart:async';
@@ -38,21 +37,12 @@ class _AddIncomePageState extends State<AddIncomePage> {
 
   List<Account> _accounts = [];
   bool _isLoadingAccounts = true;
-  String _baseCurrency = 'MYR';
 
   @override
   void initState() {
     super.initState();
     _watchIncomeCategories();
     _loadAccounts();
-    _loadBaseCurrency();
-  }
-
-  Future<void> _loadBaseCurrency() async {
-    await appSettingsRepository.ensureSettingsExist();
-    final settings = await appSettingsRepository.getSettings();
-    if (mounted)
-      setState(() => _baseCurrency = settings?.baseCurrency ?? 'MYR');
   }
 
   void _watchIncomeCategories() {
@@ -264,7 +254,7 @@ class _AddIncomePageState extends State<AddIncomePage> {
       account: selectedAccount.name,
 
       amount: amount,
-      currencyCode: selectedAccount.currencyCode,
+      currencyCode: 'MYR',
       accountAmount: amount,
 
       type: TransactionType.income,
@@ -474,9 +464,7 @@ class _AddIncomePageState extends State<AddIncomePage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                CurrencyCatalog.find(
-                  _selectedAccount?.currencyCode ?? _baseCurrency,
-                ).symbol,
+                'RM',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,

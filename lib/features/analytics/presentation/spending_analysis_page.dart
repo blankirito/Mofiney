@@ -4,6 +4,8 @@ import '../../transactions/domain/transaction.dart';
 
 import '../../accounts/domain/account.dart';
 
+import '../../../core/utils/money_formatter.dart';
+
 enum SpendingPeriod { month, threeMonths, sixMonths, year }
 
 class SpendingDateRange {
@@ -29,10 +31,14 @@ class SpendingAnalysisPage extends StatefulWidget {
     super.key,
     required this.transactions,
     required this.accounts,
+    required this.currencySymbol,
+    required this.convertMyr,
   });
 
   final List<Transaction> transactions;
   final List<Account> accounts;
+  final String currencySymbol;
+  final double Function(double) convertMyr;
 
   @override
   State<SpendingAnalysisPage> createState() => _SpendingAnalysisPageState();
@@ -40,6 +46,17 @@ class SpendingAnalysisPage extends StatefulWidget {
 
 class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
   SpendingPeriod _selectedPeriod = SpendingPeriod.month;
+
+  double _display(double amount) {
+    return widget.convertMyr(amount);
+  }
+
+  String _money(double amount) {
+    return MoneyFormatter.format(
+      amount: _display(amount),
+      symbol: widget.currencySymbol,
+    );
+  }
 
   DateTime get _referenceDate => DateTime.now();
 
@@ -615,9 +632,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
             icon: Icons.pie_chart_outline_rounded,
             label: 'LEAD CATEGORY',
             value: leadCategory == null ? 'No data' : leadCategory.key,
-            detail: leadCategory == null
-                ? null
-                : 'RM ${leadCategory.value.toStringAsFixed(2)}',
+            detail: leadCategory == null ? null : _money(leadCategory.value),
           ),
 
           const SizedBox(height: 16),
@@ -638,9 +653,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
             value: highestDay == null
                 ? 'No data'
                 : '${_shortMonthName(highestDay.key.month)} ${highestDay.key.day}',
-            detail: highestDay == null
-                ? null
-                : 'RM ${highestDay.value.toStringAsFixed(2)}',
+            detail: highestDay == null ? null : _money(highestDay.value),
           ),
 
           const SizedBox(height: 18),
@@ -755,7 +768,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
           ),
 
           Text(
-            'RM ${amount.toStringAsFixed(2)}',
+            _money(amount),
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
           ),
         ],
@@ -837,7 +850,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
               ),
 
               Text(
-                'RM ${amount.toStringAsFixed(2)}',
+                _money(amount),
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -1065,7 +1078,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
             children: buckets.map((bucket) {
               return Expanded(
                 child: Text(
-                  'RM ${bucket.amount.toStringAsFixed(2)}',
+                  _money(bucket.amount),
                   textAlign: TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1127,7 +1140,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
           const SizedBox(height: 4),
 
           Text(
-            '${sign}RM ${amount.abs().toStringAsFixed(2)}',
+            '$sign${_money(amount.abs())}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -1247,7 +1260,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
                     const SizedBox(height: 6),
 
                     Text(
-                      'RM ${_totalExpenses.toStringAsFixed(2)}',
+                      _money(_totalExpenses),
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w700,
@@ -1337,7 +1350,7 @@ class _SpendingAnalysisPageState extends State<SpendingAnalysisPage> {
 
               Expanded(
                 child: Text(
-                  'RM ${_dailyPace.toStringAsFixed(2)} / day',
+                  '${_money(_dailyPace)} / day',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,

@@ -96,6 +96,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
 
     final updatedAccount = widget.account.copyWith(
       name: name,
+      currencyCode: 'MYR',
       openingBalance: balance,
       isPrimary: _isPrimaryAccount,
       creditLimit: creditLimit,

@@ -7,8 +7,6 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/money_formatter.dart';
 import '../../../core/currency/currency_catalog.dart';
 import '../../../core/currency/currency_converter.dart';
-import '../domain/home_dashboard_data.dart';
-import '../data/mock_home_dashboard_data.dart';
 
 import '../../transactions/presentation/add_expense_page.dart';
 import '../../transactions/presentation/add_income_page.dart';
@@ -36,8 +34,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool _balanceHidden = false;
-
-  final HomeDashboardData _data = mockHomeDashboardData;
 
   List<Transaction> _transactions = [];
 
@@ -220,6 +216,9 @@ class _HomePageState extends State<HomePage> {
                       builder: (_) => SpendingAnalysisPage(
                         transactions: _transactions,
                         accounts: _accounts,
+                        currencySymbol: _currencySymbol,
+                        convertMyr: (amount) =>
+                            _converter.convert(amount, 'MYR'),
                       ),
                     ),
                   );
@@ -228,7 +227,12 @@ class _HomePageState extends State<HomePage> {
 
               const SizedBox(height: AppSpacing.md),
 
-              _SpendingForecastCard(data: _data, transactions: _transactions),
+              _SpendingForecastCard(
+                transactions: _transactions,
+                currencySymbol: _currencySymbol,
+                forecastAmount: _projectedMonthlySpending,
+                convertMyr: (amount) => _converter.convert(amount, 'MYR'),
+              ),
 
               const SizedBox(height: AppSpacing.md),
 
@@ -404,6 +408,19 @@ class _HomePageState extends State<HomePage> {
           0.0,
           (sum, transaction) => sum + _convertTransaction(transaction),
         );
+  }
+
+  double get _projectedMonthlySpending {
+    final now = DateTime.now();
+    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+
+    if (now.day <= 0) {
+      return 0;
+    }
+
+    final dailyAverage = _monthlySpent / now.day;
+
+    return dailyAverage * daysInMonth;
   }
 
   double get _monthlyIncome {
@@ -1617,10 +1634,17 @@ class _TransactionRow extends StatelessWidget {
 }
 
 class _SpendingForecastCard extends StatelessWidget {
-  const _SpendingForecastCard({required this.data, required this.transactions});
+  const _SpendingForecastCard({
+    required this.transactions,
+    required this.currencySymbol,
+    required this.forecastAmount,
+    required this.convertMyr,
+  });
 
-  final HomeDashboardData data;
   final List<Transaction> transactions;
+  final String currencySymbol;
+  final double forecastAmount;
+  final double Function(double) convertMyr;
 
   @override
   Widget build(BuildContext context) {
@@ -1668,13 +1692,13 @@ class _SpendingForecastCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
-                  color: colors.errorContainer,
+                  color: colors.primaryContainer,
                   borderRadius: BorderRadius.circular(AppRadius.full),
                 ),
                 child: Text(
-                  '+12.4% vs Sep',
+                  'DATA ESTIMATE',
                   style: AppTextStyles.labelCaps.copyWith(
-                    color: colors.onErrorContainer,
+                    color: colors.onPrimaryContainer,
                     fontSize: 9,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1686,7 +1710,7 @@ class _SpendingForecastCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
 
           Text(
-            'Projected spending next month',
+            'Projected spending this month',
             style: AppTextStyles.bodySmall.copyWith(
               color: colors.onSurfaceVariant,
             ),
@@ -1698,7 +1722,7 @@ class _SpendingForecastCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                data.currencySymbol,
+                currencySymbol,
                 style: AppTextStyles.headlineSmall.copyWith(
                   color: colors.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
@@ -1708,7 +1732,7 @@ class _SpendingForecastCard extends StatelessWidget {
               const SizedBox(width: 6),
 
               Text(
-                MoneyFormatter.amountOnly(data.forecastAmount ?? 0),
+                MoneyFormatter.amountOnly(forecastAmount),
                 style: AppTextStyles.amountLarge.copyWith(
                   color: colors.onSurface,
                   fontWeight: FontWeight.w700,
@@ -1750,7 +1774,7 @@ class _SpendingForecastCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Food & Dining spending is trending higher this month.',
+                        'Based on your recorded expenses so far this month.',
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: colors.onSurface,
                           fontWeight: FontWeight.w600,
@@ -1760,8 +1784,7 @@ class _SpendingForecastCard extends StatelessWidget {
                       const SizedBox(height: 3),
 
                       Text(
-                        'Your recent dining expenses are above '
-                        'your current monthly average.',
+                        'This is a simple pace estimate, not a prediction model.',
                         style: AppTextStyles.bodySmall.copyWith(
                           color: colors.onSurfaceVariant,
                         ),
@@ -1782,7 +1805,11 @@ class _SpendingForecastCard extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ForecastPage(transactions: transactions),
+                    builder: (_) => ForecastPage(
+                      transactions: transactions,
+                      currencySymbol: currencySymbol,
+                      convertMyr: convertMyr,
+                    ),
                   ),
                 );
               },

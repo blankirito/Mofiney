@@ -45,7 +45,7 @@ const mockHomeDashboardData = HomeDashboardData(
     52,
   ],
 
-  forecastAmount: 2680,
+  forecastAmount: 0,
   forecastChangePercentage: 12.4,
 
   forecastTitle: 'Food & Dining spending is trending higher this month.',

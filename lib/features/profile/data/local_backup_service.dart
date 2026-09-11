@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
+import 'package:drift/drift.dart';
 
 import '../../../core/database/app_database.dart';
 
@@ -31,6 +32,8 @@ class LocalBackupService {
       _database.appSettingsEntries,
     )..where((table) => table.id.equals(1))).getSingleOrNull();
 
+    final receipts = await _collectReceipts(transactions);
+
     final payload = {
       'formatVersion': 1,
       'createdAt': DateTime.now().toIso8601String(),
@@ -43,6 +46,7 @@ class LocalBackupService {
           .map((item) => item.toJson())
           .toList(),
       'settings': settings?.toJson(),
+      'receipts': receipts.map((receipt) => receipt.toJson()).toList(),
     };
 
     final directory = await getTemporaryDirectory();
@@ -57,6 +61,39 @@ class LocalBackupService {
     return file;
   }
 
+  Future<List<_BackupReceipt>> _collectReceipts(
+    List<TransactionEntry> transactions,
+  ) async {
+    final receipts = <_BackupReceipt>[];
+
+    for (final transaction in transactions) {
+      final receiptPath = transaction.receiptPath;
+
+      if (receiptPath == null || receiptPath.trim().isEmpty) {
+        continue;
+      }
+
+      final receiptFile = File(receiptPath);
+
+      if (!await receiptFile.exists()) {
+        continue;
+      }
+
+      final lastDot = receiptPath.lastIndexOf('.');
+      final extension = lastDot == -1 ? '.jpg' : receiptPath.substring(lastDot);
+
+      receipts.add(
+        _BackupReceipt(
+          transactionId: transaction.id,
+          extension: extension,
+          encodedBytes: base64Encode(await receiptFile.readAsBytes()),
+        ),
+      );
+    }
+
+    return receipts;
+  }
+
   Future<BackupPreview> validateBackup(File file) async {
     final backup = await _readBackup(file);
 
@@ -69,7 +106,7 @@ class LocalBackupService {
 
   Future<void> restoreBackup(File file) async {
     final backup = await _readBackup(file);
-
+    final restoredReceiptPaths = await _restoreReceipts(backup.receipts);
     await _database.transaction(() async {
       await _database.delete(_database.transactionEntries).go();
       await _database.delete(_database.recurringScheduleEntries).go();
@@ -91,7 +128,13 @@ class LocalBackupService {
       }
 
       for (final transaction in backup.transactions) {
-        await _database.into(_database.transactionEntries).insert(transaction);
+        final restoredReceiptPath = restoredReceiptPaths[transaction.id];
+
+        await _database
+            .into(_database.transactionEntries)
+            .insert(
+              transaction.copyWith(receiptPath: Value(restoredReceiptPath)),
+            );
       }
 
       for (final schedule in backup.recurringSchedules) {
@@ -106,6 +149,50 @@ class LocalBackupService {
             .insert(backup.settings!);
       }
     });
+  }
+
+  Future<Map<String, String>> _restoreReceipts(
+    List<_BackupReceipt> receipts,
+  ) async {
+    if (receipts.isEmpty) {
+      return const <String, String>{};
+    }
+
+    final documentsDirectory = await getApplicationDocumentsDirectory();
+
+    final receiptsDirectory = Directory(
+      '${documentsDirectory.path}${Platform.pathSeparator}receipts',
+    );
+
+    await receiptsDirectory.create(recursive: true);
+
+    final restoredPaths = <String, String>{};
+
+    for (final receipt in receipts) {
+      final safeId = receipt.transactionId.replaceAll(
+        RegExp(r'[^a-zA-Z0-9_-]'),
+        '_',
+      );
+
+      final safeExtension =
+          RegExp(r'^\.[a-zA-Z0-9]{1,10}$').hasMatch(receipt.extension)
+          ? receipt.extension
+          : '.jpg';
+
+      final restoredFile = File(
+        '${receiptsDirectory.path}${Platform.pathSeparator}'
+        'receipt_$safeId$safeExtension',
+      );
+
+      await restoredFile.writeAsBytes(
+        base64Decode(receipt.encodedBytes),
+        flush: true,
+      );
+
+      restoredPaths[receipt.transactionId] = restoredFile.path;
+    }
+
+    return restoredPaths;
   }
 
   Future<_BackupData> _readBackup(File file) async {
@@ -158,6 +245,7 @@ class LocalBackupService {
         AppSettingsEntry.fromJson,
         'settings',
       ),
+      receipts: _decodeReceipts(decoded['receipts']),
     );
   }
 
@@ -192,6 +280,24 @@ class LocalBackupService {
 
     return fromJson(Map<String, dynamic>.from(value));
   }
+
+  List<_BackupReceipt> _decodeReceipts(dynamic value) {
+    if (value == null) {
+      return const [];
+    }
+
+    if (value is! List) {
+      throw const FormatException('This backup has invalid receipts.');
+    }
+
+    return value.map((item) {
+      if (item is! Map) {
+        throw const FormatException('This backup has invalid receipts.');
+      }
+
+      return _BackupReceipt.fromJson(Map<String, dynamic>.from(item));
+    }).toList();
+  }
 }
 
 class BackupPreview {
@@ -215,6 +321,7 @@ class _BackupData {
     required this.categoryBudgets,
     required this.recurringSchedules,
     required this.settings,
+    required this.receipts,
   });
 
   final DateTime createdAt;
@@ -224,4 +331,43 @@ class _BackupData {
   final List<CategoryBudgetEntry> categoryBudgets;
   final List<RecurringScheduleEntry> recurringSchedules;
   final AppSettingsEntry? settings;
+  final List<_BackupReceipt> receipts;
+}
+
+class _BackupReceipt {
+  const _BackupReceipt({
+    required this.transactionId,
+    required this.extension,
+    required this.encodedBytes,
+  });
+
+  final String transactionId;
+  final String extension;
+  final String encodedBytes;
+
+  factory _BackupReceipt.fromJson(Map<String, dynamic> json) {
+    final transactionId = json['transactionId'];
+    final extension = json['extension'];
+    final encodedBytes = json['encodedBytes'];
+
+    if (transactionId is! String ||
+        extension is! String ||
+        encodedBytes is! String) {
+      throw const FormatException('This backup has invalid receipt data.');
+    }
+
+    return _BackupReceipt(
+      transactionId: transactionId,
+      extension: extension,
+      encodedBytes: encodedBytes,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'transactionId': transactionId,
+      'extension': extension,
+      'encodedBytes': encodedBytes,
+    };
+  }
 }

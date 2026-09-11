@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../domain/account.dart';
-import '../../../core/app_dependencies.dart';
-import '../../../core/currency/currency_catalog.dart';
-import '../../../core/currency/currency_picker.dart';
 
 class AddAccountPage extends StatefulWidget {
   const AddAccountPage({super.key});
@@ -26,20 +23,6 @@ class _AddAccountPageState extends State<AddAccountPage> {
 
   int _selectedColorIndex = 0;
   bool _isPrimaryAccount = false;
-  String _currencyCode = 'MYR';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadBaseCurrency();
-  }
-
-  Future<void> _loadBaseCurrency() async {
-    await appSettingsRepository.ensureSettingsExist();
-    final settings = await appSettingsRepository.getSettings();
-    if (mounted)
-      setState(() => _currencyCode = settings?.baseCurrency ?? 'MYR');
-  }
 
   @override
   void dispose() {
@@ -161,7 +144,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
       name: name,
       type: _selectedType,
       openingBalance: balance,
-      currencyCode: _currencyCode,
+      currencyCode: 'MYR',
       isPrimary: _isPrimaryAccount,
       isActive: true,
       creditLimit: creditLimit,
@@ -340,65 +323,47 @@ class _AddAccountPageState extends State<AddAccountPage> {
 
           const SizedBox(height: 8),
 
-          InkWell(
-            onTap: () async {
-              final currency = await showCurrencyPicker(
-                context,
-                selectedCode: _currencyCode,
-                title: 'Account currency',
-              );
-              if (currency != null && mounted)
-                setState(() => _currencyCode = currency.code);
-            },
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              decoration: BoxDecoration(
-                color: colors.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colors.error,
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Text(
-                      _currencyCode,
-                      style: TextStyle(
-                        color: colors.onError,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.primary,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Text(
+                    'MYR',
+                    style: TextStyle(
+                      color: colors.onPrimary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
+                ),
 
-                  const SizedBox(width: 10),
+                const SizedBox(width: 10),
 
-                  Expanded(
-                    child: Text(
-                      '${CurrencyCatalog.find(_currencyCode).code} — ${CurrencyCatalog.find(_currencyCode).name} (${CurrencyCatalog.find(_currencyCode).symbol})',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: colors.onSurface,
-                      ),
+                Expanded(
+                  child: Text(
+                    'Malaysian Ringgit (RM)',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colors.onSurface,
                     ),
                   ),
-
-                  Icon(
-                    Icons.unfold_more_rounded,
-                    size: 18,
-                    color: colors.onSurfaceVariant,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
 
@@ -422,7 +387,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
             controller: _balanceController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
-              prefixText: '${CurrencyCatalog.find(_currencyCode).symbol} ',
+              prefixText: 'RM ',
               hintText: '0.00',
               filled: true,
               fillColor: colors.surfaceContainerLow,
@@ -469,7 +434,7 @@ class _AddAccountPageState extends State<AddAccountPage> {
                 decimal: true,
               ),
               decoration: InputDecoration(
-                prefixText: '${CurrencyCatalog.find(_currencyCode).symbol} ',
+                prefixText: 'RM ',
                 hintText: '0.00',
                 filled: true,
                 fillColor: colors.surfaceContainerLow,

@@ -12,7 +12,6 @@ import 'dart:async';
 
 import '../../accounts/domain/account.dart';
 import '../../categories/domain/category.dart';
-import '../../../core/currency/currency_catalog.dart';
 
 class EditTransactionPage extends StatefulWidget {
   const EditTransactionPage({super.key, required this.transaction});
@@ -277,7 +276,7 @@ class _EditTransactionPageState extends State<EditTransactionPage> {
         .toSet()
         .toList();
 
-    final transactionCurrency = selectedAccount.currencyCode;
+    const transactionCurrency = 'MYR';
     final accountAmount = amount;
     final destinationAccountAmount =
         widget.transaction.type == TransactionType.transfer ? amount : null;
@@ -520,9 +519,7 @@ class _EditTransactionPageState extends State<EditTransactionPage> {
     );
   }
 
-  String get _transactionCurrencySymbol {
-    return CurrencyCatalog.find(widget.transaction.currencyCode).symbol;
-  }
+  String get _transactionCurrencySymbol => 'RM';
 
   Widget _buildTransferAccountField(
     BuildContext context, {

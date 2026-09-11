@@ -4,6 +4,15 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 
+import '../data/profile_preferences.dart';
+
+import 'dart:async';
+
+import '../../../core/app_dependencies.dart';
+import '../../../core/currency/currency_catalog.dart';
+import '../../../core/database/app_database.dart';
+import '../../accounts/domain/account.dart';
+
 class ProfileDetailsPage extends StatefulWidget {
   const ProfileDetailsPage({super.key});
 
@@ -14,7 +23,75 @@ class ProfileDetailsPage extends StatefulWidget {
 class _ProfileDetailsPageState extends State<ProfileDetailsPage> {
   bool _showCloudMode = false;
 
-  String _displayName = 'Mofiney User';
+  final ProfilePreferences _profilePreferences = ProfilePreferences();
+
+  String _displayName = ProfilePreferences.defaultDisplayName;
+
+  List<Account> _accounts = [];
+
+  AppSettingsEntry? _settings;
+
+  StreamSubscription<List<Account>>? _accountsSubscription;
+
+  StreamSubscription<AppSettingsEntry?>? _settingsSubscription;
+
+  String get _displayInitial {
+    final trimmedName = _displayName.trim();
+
+    if (trimmedName.isEmpty) {
+      return 'U';
+    }
+
+    return trimmedName.substring(0, 1).toUpperCase();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDisplayName();
+    _watchAccounts();
+    _watchSettings();
+  }
+
+  Future<void> _loadDisplayName() async {
+    final displayName = await _profilePreferences.loadDisplayName();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _displayName = displayName;
+    });
+  }
+
+  void _watchAccounts() {
+    _accountsSubscription = accountRepository.watchAllAccounts().listen((
+      accounts,
+    ) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _accounts = accounts;
+      });
+    });
+  }
+
+  void _watchSettings() {
+    _settingsSubscription = appSettingsRepository.watchSettings().listen((
+      settings,
+    ) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _settings = settings;
+      });
+    });
+  }
 
   Future<void> _editDisplayName() async {
     String editingName = _displayName;
@@ -68,13 +145,41 @@ class _ProfileDetailsPageState extends State<ProfileDetailsPage> {
       },
     );
 
-    if (newName == null || !mounted) {
+    if (newName == null) {
+      return;
+    }
+
+    await _profilePreferences.saveDisplayName(newName);
+
+    if (!mounted) {
       return;
     }
 
     setState(() {
       _displayName = newName;
     });
+  }
+
+  int get _activeAccountCount {
+    return _accounts.where((account) => account.isActive).length;
+  }
+
+  String get _baseCurrency {
+    return _settings?.baseCurrency ?? 'MYR';
+  }
+
+  String get _baseCurrencyLabel {
+    final currency = CurrencyCatalog.find(_baseCurrency);
+
+    return '${currency.code} (${currency.symbol})';
+  }
+
+  @override
+  void dispose() {
+    _accountsSubscription?.cancel();
+    _settingsSubscription?.cancel();
+
+    super.dispose();
   }
 
   @override
@@ -118,7 +223,7 @@ class _ProfileDetailsPageState extends State<ProfileDetailsPage> {
                           ),
                           alignment: Alignment.center,
                           child: Text(
-                            'U',
+                            _displayInitial,
                             style: AppTextStyles.headlineLarge.copyWith(
                               color: colors.onPrimaryContainer,
                               fontWeight: FontWeight.w800,
@@ -230,7 +335,9 @@ class _ProfileDetailsPageState extends State<ProfileDetailsPage> {
                           child: _SummaryTile(
                             icon: Icons.account_balance_wallet_outlined,
                             label: 'ACCOUNTS',
-                            value: '5 Active',
+                            value: _activeAccountCount == 1
+                                ? '1 Active'
+                                : '$_activeAccountCount Active',
                           ),
                         ),
 
@@ -240,7 +347,7 @@ class _ProfileDetailsPageState extends State<ProfileDetailsPage> {
                           child: _SummaryTile(
                             icon: Icons.payments_outlined,
                             label: 'BASE CURRENCY',
-                            value: 'MYR (RM)',
+                            value: _baseCurrencyLabel,
                           ),
                         ),
                       ],

@@ -22,9 +22,9 @@ class AccountSetupPage extends StatefulWidget {
 class _AccountSetupPageState extends State<AccountSetupPage> {
   AccountType selectedType = AccountType.bank;
 
-  final accountNameController = TextEditingController(text: 'Maybank Savings');
+  final accountNameController = TextEditingController();
 
-  final balanceController = TextEditingController(text: '5000.00');
+  final balanceController = TextEditingController(text: '0.00');
 
   @override
   void dispose() {
@@ -161,7 +161,7 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
                         ),
                       ],
                       decoration: InputDecoration(
-                        prefixText: '${widget.data.currencySymbol} ',
+                        prefixText: 'RM ',
                         hintText: '0.00',
                       ),
                     ),
@@ -279,7 +279,7 @@ class _AccountSetupPageState extends State<AccountSetupPage> {
   }
 }
 
-enum AccountType { bank, cash, eWallet, credit }
+enum AccountType { bank, cash, eWallet }
 
 extension AccountTypeDetails on AccountType {
   String get label {
@@ -290,8 +290,6 @@ extension AccountTypeDetails on AccountType {
         return 'Cash';
       case AccountType.eWallet:
         return 'E-Wallet';
-      case AccountType.credit:
-        return 'Credit';
     }
   }
 
@@ -303,8 +301,6 @@ extension AccountTypeDetails on AccountType {
         return Icons.payments_outlined;
       case AccountType.eWallet:
         return Icons.phone_android_outlined;
-      case AccountType.credit:
-        return Icons.credit_card_outlined;
     }
   }
 }

@@ -27,4 +27,29 @@ class ReceiptStorage {
 
     return savedFile.path;
   }
+
+  static Future<void> delete(String? receiptPath) async {
+    if (receiptPath == null || receiptPath.trim().isEmpty) {
+      return;
+    }
+
+    final documentsDirectory = await getApplicationDocumentsDirectory();
+
+    final receiptsDirectory = Directory(
+      '${documentsDirectory.path}${Platform.pathSeparator}receipts',
+    );
+
+    final receiptFile = File(receiptPath);
+
+    final allowedPrefix =
+        '${receiptsDirectory.absolute.path}${Platform.pathSeparator}';
+
+    if (!receiptFile.absolute.path.startsWith(allowedPrefix)) {
+      return;
+    }
+
+    if (await receiptFile.exists()) {
+      await receiptFile.delete();
+    }
+  }
 }
