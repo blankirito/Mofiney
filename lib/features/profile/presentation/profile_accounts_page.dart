@@ -12,6 +12,8 @@ import '../../accounts/presentation/edit_account_page.dart';
 import '../../../core/currency/currency_catalog.dart';
 import '../../../core/currency/currency_converter.dart';
 import '../../../core/database/app_database.dart';
+import '../../accounts/domain/account_balance_calculator.dart';
+import '../../transactions/domain/transaction.dart';
 
 class ProfileAccountsPage extends StatefulWidget {
   const ProfileAccountsPage({super.key});
@@ -22,8 +24,10 @@ class ProfileAccountsPage extends StatefulWidget {
 
 class _ProfileAccountsPageState extends State<ProfileAccountsPage> {
   List<Account> _accounts = [];
+  List<Transaction> _transactions = [];
 
   StreamSubscription<List<Account>>? _accountsSubscription;
+  StreamSubscription<List<Transaction>>? _transactionsSubscription;
 
   AppSettingsEntry? _settings;
 
@@ -36,6 +40,7 @@ class _ProfileAccountsPageState extends State<ProfileAccountsPage> {
     super.initState();
 
     _watchAccounts();
+    _watchTransactions();
     _watchSettings();
   }
 
@@ -56,6 +61,27 @@ class _ProfileAccountsPageState extends State<ProfileAccountsPage> {
         debugPrint('Failed to watch accounts: $error');
       },
     );
+  }
+
+  void _watchTransactions() {
+    _transactionsSubscription?.cancel();
+
+    _transactionsSubscription = transactionRepository
+        .watchAllTransactions()
+        .listen(
+          (transactions) {
+            if (!mounted) {
+              return;
+            }
+
+            setState(() {
+              _transactions = transactions;
+            });
+          },
+          onError: (Object error) {
+            debugPrint('Failed to watch account transactions: $error');
+          },
+        );
   }
 
   void _watchSettings() {
@@ -96,6 +122,7 @@ class _ProfileAccountsPageState extends State<ProfileAccountsPage> {
   @override
   void dispose() {
     _accountsSubscription?.cancel();
+    _transactionsSubscription?.cancel();
     _settingsSubscription?.cancel();
 
     super.dispose();
@@ -113,20 +140,24 @@ class _ProfileAccountsPageState extends State<ProfileAccountsPage> {
     return _activeAccounts.where((account) => account.type == type).toList();
   }
 
+  double _currentBalance(Account account) {
+    return AccountBalanceCalculator.calculate(account, _transactions);
+  }
+
   double _sumBalance(AccountType type) {
     return _accountsByType(type)
-        .fold(0, (total, account) => total + account.openingBalance);
+        .fold(0, (total, account) => total + _currentBalance(account));
   }
 
   double get _totalAssets {
     return _activeAccounts
         .where((account) => account.type != AccountType.creditCard)
-        .fold(0, (total, account) => total + account.openingBalance);
+        .fold(0, (total, account) => total + _currentBalance(account));
   }
 
   double get _totalLiabilities {
     return _accountsByType(AccountType.creditCard)
-        .fold(0, (total, account) => total + account.openingBalance);
+        .fold(0, (total, account) => total + _currentBalance(account));
   }
 
   String get _baseCurrency {
@@ -596,6 +627,7 @@ class _ProfileAccountsPageState extends State<ProfileAccountsPage> {
 
   Widget _buildStandardAccountCard(BuildContext context, Account account) {
     final colors = Theme.of(context).colorScheme;
+    final currentBalance = _currentBalance(account);
 
     return Container(
       width: double.infinity,
@@ -668,7 +700,7 @@ class _ProfileAccountsPageState extends State<ProfileAccountsPage> {
                 const SizedBox(height: 4),
 
                 Text(
-                  'Current Balance: ${_money(account.openingBalance)}',
+                  'Current Balance: ${_money(currentBalance)}',
                   style: TextStyle(
                     fontSize: 12,
                     color: colors.onSurfaceVariant,
@@ -700,7 +732,7 @@ class _ProfileAccountsPageState extends State<ProfileAccountsPage> {
     final colors = Theme.of(context).colorScheme;
 
     final double limit = account.creditLimit ?? 0;
-    final double outstanding = account.openingBalance;
+    final double outstanding = _currentBalance(account);
 
     final double available = limit > outstanding ? limit - outstanding : 0;
 
