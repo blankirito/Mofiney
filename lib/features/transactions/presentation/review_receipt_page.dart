@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../domain/receipt_ocr_draft.dart';
+
 class ReceiptItem {
   ReceiptItem({required this.name, required this.price});
 
@@ -10,9 +12,14 @@ class ReceiptItem {
 }
 
 class ReviewReceiptPage extends StatefulWidget {
-  final String imagePath;
+  const ReviewReceiptPage({
+    super.key,
+    required this.imagePath,
+    required this.draft,
+  });
 
-  const ReviewReceiptPage({super.key, required this.imagePath});
+  final String imagePath;
+  final ReceiptOcrDraft draft;
 
   @override
   State<ReviewReceiptPage> createState() => _ReviewReceiptPageState();

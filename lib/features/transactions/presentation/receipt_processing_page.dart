@@ -4,6 +4,11 @@ import 'package:flutter/material.dart';
 
 import 'review_receipt_page.dart';
 
+import '../data/receipt_ocr_service.dart';
+import '../domain/receipt_ocr_draft.dart';
+
+import 'package:image_picker/image_picker.dart';
+
 class ReceiptProcessingPage extends StatefulWidget {
   final String imagePath;
 
@@ -16,54 +21,164 @@ class ReceiptProcessingPage extends StatefulWidget {
 class _ReceiptProcessingPageState extends State<ReceiptProcessingPage> {
   int _currentStep = 0;
 
+  final ImagePicker _imagePicker = ImagePicker();
+
+  String? _errorMessage;
+
   final List<String> _steps = [
-    'Detecting receipt',
-    'Reading merchant and date',
-    'Extracting items',
-    'Finding total',
-    'Suggesting category',
+    'Preparing receipt image',
+    'Reading receipt text',
+    'Finding merchant and date',
+    'Finding total amount',
+    'Preparing review',
   ];
 
   @override
   void initState() {
     super.initState();
 
-    _startFakeProcessing();
+    _startProcessing();
   }
 
-  Future<void> _startFakeProcessing() async {
-    for (int i = 0; i < _steps.length; i++) {
-      await Future.delayed(const Duration(milliseconds: 900));
+  Future<void> _startProcessing() async {
+    try {
+      final recognition = ReceiptOcrService().recognize(widget.imagePath);
+
+      for (var index = 0; index < _steps.length - 1; index++) {
+        await Future.delayed(const Duration(milliseconds: 350));
+
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _currentStep = index + 1;
+        });
+      }
+
+      final ReceiptOcrDraft draft = await recognition;
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _currentStep = i + 1;
+        _currentStep = _steps.length;
+      });
+
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              ReviewReceiptPage(imagePath: widget.imagePath, draft: draft),
+        ),
+      );
+    } on ReceiptOcrException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _errorMessage = error.message;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _errorMessage =
+            'Could not read this receipt. Please try another photo.';
       });
     }
+  }
 
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Receipt processing completed.')),
+  Future<void> _pickReplacementReceipt(ImageSource source) async {
+    final image = await _imagePicker.pickImage(
+      source: source,
+      imageQuality: 90,
     );
 
-    // 让用户看到一下 5/5 + Receipt processed!
-    await Future.delayed(const Duration(milliseconds: 700));
-
-    if (!mounted) {
+    if (image == null || !mounted) {
       return;
     }
 
-    // Processing Page 完成后，进入 Review Receipt
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => ReviewReceiptPage(imagePath: widget.imagePath),
+        builder: (context) => ReceiptProcessingPage(imagePath: image.path),
+      ),
+    );
+  }
+
+  Widget _buildErrorCard(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.receipt_long_outlined,
+            color: colors.onErrorContainer,
+            size: 32,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'We could not read this receipt',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: colors.onErrorContainer,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _errorMessage ?? 'Please try another photo.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: colors.onErrorContainer,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    _pickReplacementReceipt(ImageSource.camera);
+                  },
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  label: const Text('Retake'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () {
+                    _pickReplacementReceipt(ImageSource.gallery);
+                  },
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('Choose from Gallery'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -108,6 +223,10 @@ class _ReceiptProcessingPageState extends State<ReceiptProcessingPage> {
               const SizedBox(height: 24),
 
               _buildSecurityFooter(context),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 16),
+                _buildErrorCard(context),
+              ],
             ],
           ),
         ),
@@ -168,7 +287,9 @@ class _ReceiptProcessingPageState extends State<ReceiptProcessingPage> {
         const SizedBox(height: 8),
 
         Text(
-          _currentStep >= _steps.length ? 'Your receipt is ready for review.' : 'Mofiney is extracting line items, merchant details and totals.',
+          _currentStep >= _steps.length
+              ? 'Your receipt is ready for review.'
+              : 'Mofiney is reading receipt text, merchant details and totals.',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 14,
@@ -418,7 +539,7 @@ class _ReceiptProcessingPageState extends State<ReceiptProcessingPage> {
                 const SizedBox(height: 4),
 
                 Text(
-                  'You\'ll be able to review and edit every line item and amount on the next screen.',
+                  'You\'ll be able to review and edit the merchant, date and amount on the next screen.',
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.5,
