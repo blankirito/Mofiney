@@ -67,4 +67,79 @@ Cake
     expect(result.amount, isNull);
     expect(result.merchant, 'Small Cafe');
   });
+    test('finds a split MIX Store merchant and total from real OCR text', () {
+    final result = ReceiptOcrParser.parse('''
+Ff9:31
+Transaction Details
+MIX EMbIRE SDN BHO, (1416523 H)
+MiX Store@Sunway Carnivat
+(Mall
+MIX.STORE
+Nett Tota
+Subtotal
+:2026-09-13 14:43:49
+Total
+RM
+9.80
+28.20
+Thank You For Shopping With Us!
+28.20
+Edit Transaction
+''');
+
+    expect(result.merchant, 'MiX Store@Sunway Carnivat');
+    expect(result.date, DateTime(2026, 9, 13));
+    expect(result.amount, 28.20);
+  });
+
+  test('parses a split German total and dotted date from real OCR text', () {
+    final result = ReceiptOcrParser.parse('''
+Ber ghotel
+Grosse Scheidegg
+Rech. Nr. 4572
+Total :
+30.07.2007/13:29:17
+Tisch 7/01
+5.00
+à 18.50
+CHF
+54.50 CHF:
+Entspricht in Euro
+36.33 EUR
+''');
+
+    expect(result.merchant, 'Ber ghotel');
+    expect(result.date, DateTime(2007, 7, 30));
+    expect(result.amount, 54.50);
+  });
+    test('prefers a later exact total over an earlier partial net total', () {
+    final result = ReceiptOcrParser.parse('''
+MiX Store@Sunway Carnivat
+2026-09-13
+Nett Tota
+Subtotal
+Product Name
+Coupon Applied
+Order Discount
+Rounding Adjustment
+Cashier Name
+Membership Points
+Thank You For Shopping With Us!
+Visit Us Again!
+Store Address
+Customer Service
+Opening Hours
+Facebook Mix Store Malaysia
+Instagram mixcom.my
+Email info@mix.com.my
+Total
+RM
+28.20
+28.20
+''');
+
+    expect(result.merchant, 'MiX Store@Sunway Carnivat');
+    expect(result.date, DateTime(2026, 9, 13));
+    expect(result.amount, 28.20);
+  });
 }
