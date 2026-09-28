@@ -330,6 +330,7 @@ class _MonthlyTargetBudgetPageState extends State<MonthlyTargetBudgetPage> {
     final category = await showModalBottomSheet<Category>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -338,29 +339,42 @@ class _MonthlyTargetBudgetPageState extends State<MonthlyTargetBudgetPage> {
             AppSpacing.md,
             AppSpacing.md,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Set Category Budget', style: AppTextStyles.headlineMedium),
-              const SizedBox(height: 4),
-              Text(
-                'Choose an expense category without a monthly budget.',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+          child: FractionallySizedBox(
+            heightFactor: 0.75,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Set Category Budget',
+                  style: AppTextStyles.headlineMedium,
                 ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              ...categories.map(
-                (item) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(_iconFromCodePoint(item.iconCodePoint)),
-                  title: Text(item.name),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => Navigator.pop(sheetContext, item),
+                const SizedBox(height: 4),
+                Text(
+                  'Choose an expense category without a monthly budget.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: AppSpacing.sm),
+                Expanded(
+                  child: ListView(
+                    children: categories
+                        .map(
+                          (item) => ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              _iconFromCodePoint(item.iconCodePoint),
+                            ),
+                            title: Text(item.name),
+                            trailing: const Icon(Icons.chevron_right_rounded),
+                            onTap: () => Navigator.pop(sheetContext, item),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
