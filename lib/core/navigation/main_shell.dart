@@ -38,6 +38,17 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
+  Future<void> _openReceiptScanner() async {
+    final savedTransaction = await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const ScanReceiptPage()));
+
+    if (!mounted || savedTransaction == null) {
+      return;
+    }
+
+    _onDestinationSelected(1);
+  }
+
   void _showQuickAddSheet() {
     showModalBottomSheet(
       context: context,
@@ -75,10 +86,7 @@ class _MainShellState extends State<MainShell> {
           },
           onScanReceipt: () {
             Navigator.pop(sheetContext);
-
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const ScanReceiptPage()));
+            _openReceiptScanner();
           },
         );
       },

@@ -63,18 +63,24 @@ class _ScanReceiptPageState extends State<ScanReceiptPage> {
     });
   }
 
-  void _usePhoto() {
-    if (_capturedImage == null) {
+  Future<void> _usePhoto() async {
+    final capturedImage = _capturedImage;
+
+    if (capturedImage == null) {
       return;
     }
 
-    Navigator.push(
-      context,
+    final savedTransaction = await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) =>
-            ReceiptProcessingPage(imagePath: _capturedImage!.path),
+        builder: (_) => ReceiptProcessingPage(imagePath: capturedImage.path),
       ),
     );
+
+    if (!mounted || savedTransaction == null) {
+      return;
+    }
+
+    Navigator.of(context).pop(savedTransaction);
   }
 
   @override

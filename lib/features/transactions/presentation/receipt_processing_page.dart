@@ -72,13 +72,18 @@ class _ReceiptProcessingPageState extends State<ReceiptProcessingPage> {
         return;
       }
 
-      Navigator.pushReplacement(
-        context,
+      final savedTransaction = await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) =>
+          builder: (_) =>
               ReviewReceiptPage(imagePath: widget.imagePath, draft: draft),
         ),
       );
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pop(savedTransaction);
     } on ReceiptOcrException catch (error) {
       if (!mounted) {
         return;
@@ -109,12 +114,17 @@ class _ReceiptProcessingPageState extends State<ReceiptProcessingPage> {
       return;
     }
 
-    Navigator.pushReplacement(
-      context,
+    final savedTransaction = await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => ReceiptProcessingPage(imagePath: image.path),
+        builder: (_) => ReceiptProcessingPage(imagePath: image.path),
       ),
     );
+
+    if (!mounted || savedTransaction == null) {
+      return;
+    }
+
+    Navigator.of(context).pop(savedTransaction);
   }
 
   Widget _buildErrorCard(BuildContext context) {
