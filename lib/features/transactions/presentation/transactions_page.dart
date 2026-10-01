@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/lazy_sliver_list.dart';
 
 import '../domain/transaction.dart';
 
@@ -151,48 +152,97 @@ class _TransactionsPageState extends State<TransactionsPage> {
       );
     }
 
+    final filteredTransactions = _getFilteredTransactions();
+    final groupedTransactions = _groupTransactionsByDate(filteredTransactions)
+        .entries
+        .toList();
+
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.sm,
-            AppSpacing.md,
-            AppSpacing.xl,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Transactions',
-                style: AppTextStyles.headlineLargeMobile.copyWith(
-                  color: colors.onSurface,
-                  fontWeight: FontWeight.w800,
+        child: CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.md,
+                0,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Transactions',
+                      style: AppTextStyles.headlineLargeMobile.copyWith(
+                        color: colors.onSurface,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _buildSearchBar(context),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildTypeTabs(context),
+                    const SizedBox(height: AppSpacing.md),
+                    _buildFilterChips(context),
+                    const SizedBox(height: AppSpacing.md),
+                    _buildCashFlowSummary(context, filteredTransactions),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      '${filteredTransactions.length} transactions found',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
                 ),
               ),
-
-              const SizedBox(height: AppSpacing.md),
-
-              _buildSearchBar(context),
-
-              const SizedBox(height: AppSpacing.sm),
-
-              _buildTypeTabs(context),
-
-              const SizedBox(height: AppSpacing.md),
-
-              _buildFilterChips(context),
-
-              const SizedBox(height: AppSpacing.md),
-
-              _buildCashFlowSummary(context),
-
-              const SizedBox(height: AppSpacing.md),
-
-              _buildTransactionList(context),
-            ],
-          ),
+            ),
+            if (filteredTransactions.isEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  0,
+                  AppSpacing.md,
+                  AppSpacing.xl,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: Text(
+                    'No records found',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  0,
+                  AppSpacing.md,
+                  AppSpacing.xl,
+                ),
+                sliver: LazySliverList(
+                  itemCount: groupedTransactions.length,
+                  itemBuilder: (context, index) {
+                    final entry = groupedTransactions[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: _TransactionGroup(
+                        date: entry.key,
+                        transactions: entry.value,
+                        repository: widget.repository,
+                        currencySymbol: _currencySymbol,
+                        convertedAmount: _convertedAmount,
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -888,9 +938,11 @@ class _TransactionsPageState extends State<TransactionsPage> {
     return months[month - 1];
   }
 
-  Widget _buildCashFlowSummary(BuildContext context) {
+  Widget _buildCashFlowSummary(
+    BuildContext context,
+    List<Transaction> transactions,
+  ) {
     final colors = Theme.of(context).colorScheme;
-    final transactions = _getFilteredTransactions();
 
     double totalIn = 0;
     double totalOut = 0;
@@ -1097,51 +1149,6 @@ class _TransactionsPageState extends State<TransactionsPage> {
       ..sort((a, b) => b.key.compareTo(a.key));
 
     return Map.fromEntries(sortedEntries);
-  }
-
-  Widget _buildTransactionList(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    final filteredTransactions = _getFilteredTransactions();
-
-    final groupedTransactions = _groupTransactionsByDate(filteredTransactions);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '${filteredTransactions.length} transactions found',
-          style: AppTextStyles.bodySmall.copyWith(
-            color: colors.onSurfaceVariant,
-          ),
-        ),
-
-        const SizedBox(height: AppSpacing.sm),
-
-        if (filteredTransactions.isEmpty)
-          Text(
-            'No records found',
-            style: AppTextStyles.bodySmall.copyWith(
-              color: colors.onSurfaceVariant,
-            ),
-          )
-        else
-          Column(
-            children: groupedTransactions.entries.map((entry) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: _TransactionGroup(
-                  date: entry.key,
-                  transactions: entry.value,
-                  repository: widget.repository,
-                  currencySymbol: _currencySymbol,
-                  convertedAmount: _convertedAmount,
-                ),
-              );
-            }).toList(),
-          ),
-      ],
-    );
   }
 }
 
